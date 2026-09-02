@@ -1,2 +1,318 @@
-# apple2-odin-public
-An Apple II emulator written from scratch in Odin. A personal journey to learn Odin, rediscover the Apple II from the inside, and understand emulation one step at a time. Currently boots the original Apple II ROM and runs Applesoft BASIC interactively.
+# apple2-odin
+
+An Apple II emulator written from scratch in [Odin](https://odin-lang.org/).
+
+> **Source code is currently private while the project is in its early
+> development stages.**
+>
+> This repository documents the project, its progress and its goals.
+
+## About the project
+
+This project started as a personal challenge: learn Odin, rediscover the
+Apple II from the inside, and understand how an emulator actually works by
+building one step at a time.
+
+I have known and used the Apple II for about 40 years.
+
+Building an emulator is turning out to be a surprisingly good way to discover
+how much I still didn't know about it.
+
+The project is intentionally developed incrementally, usually in small
+sessions of around one hour.
+
+The objective is not to build an emulator as quickly as possible, but to
+understand the machine while building it.
+
+## Current status
+
+The emulator can now boot a real Apple II ROM and run Applesoft BASIC
+interactively in an SDL3 window.
+
+For example, programs can be entered and executed directly:
+
+![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-basic.png)
+
+*The original Apple II ROM running Applesoft BASIC interactively in
+apple2-odin. The BASIC program, keyboard handling, execution and text output
+are all handled by the emulated machine.*
+
+
+The display is rendered using the original Apple II character generator ROM
+(341-0036), including normal, inverse and flashing characters.
+
+The emulator is already using original Apple II hardware mechanisms such as
+the keyboard soft switches and PAGE1/PAGE2 video selection.
+
+The NMOS 6502 core currently implements **118 of the 151 official opcode
+variants**.
+
+## What is already working
+
+- NMOS 6502 CPU emulation
+- 118 / 151 official NMOS 6502 opcode variants
+- CPU registers, flags and stack
+- Multiple 6502 addressing modes
+- Apple II memory and bus
+- ROM loading and RESET vector handling
+- Boot of a real Apple II ROM
+- Applesoft BASIC
+- Apple II keyboard soft switches
+- Interactive PC keyboard input
+- 40×24 Apple II text display
+- Original Apple II character generator ROM
+- Normal, inverse and flashing text
+- PAGE1 / PAGE2 video selection
+- Apple II video soft switches
+- SDL3 interactive frontend
+- BASIC program execution and screen scrolling
+
+## Architecture
+
+The emulation core is deliberately kept independent from the host frontend.
+
+```text
+Physical keyboard
+       │
+       ▼
+      SDL3
+       │
+       ▼
++------------------+
+|     Apple II     |
+|                  |
+| Memory / Bus     |
+| ROM              |
+| Keyboard I/O     |
+| Video state      |
+| Text video       |
++--------+---------+
+         │
+         ▼
++------------------+
+|       6502       |
+|                  |
+| Registers        |
+| Instructions     |
+| Addressing modes |
+| Flags / Stack    |
++------------------+
+```
+
+The 6502 core does not know that it is running inside an Apple II, and the
+Apple II emulation contains no SDL-specific logic.
+
+Keeping these layers separate should make other frontends and platforms
+possible later.
+
+For now, however, **Windows is the primary development platform**.
+
+## Milestone #1 — From nothing to "HI"
+
+The first milestone was getting enough of the 6502 running to execute a small
+program and produce recognizable output.
+
+```text
+HI
+```
+
+It wasn't much.
+
+But it was the first time the CPU I was building actually did something
+recognizable.
+
+## Milestone #2 — From "HI" to "APPLE ]["
+
+The next major milestone was very different.
+
+The emulator reached the point where it could start executing the original
+Apple II ROM from its RESET vector.
+
+Eventually, this appeared:
+
+```text
+APPLE ][
+```
+
+This time I didn't write the message.
+
+**The original Apple II ROM did.**
+
+Soon afterwards, the Applesoft prompt appeared and the machine became
+interactive.
+
+That was the point where the project started to feel less like a CPU
+experiment and more like an Apple II.
+
+## Authentic Apple II text
+
+The initial SDL frontend deliberately used a temporary host-side debug font.
+
+It has since been replaced by rendering based on the original Apple II
+character generator ROM (341-0036).
+
+The emulator now decodes the character stored in Apple II text memory,
+determines its display attribute and renders the corresponding character ROM
+bitmap.
+
+Normal, inverse and flashing characters are supported.
+
+Text PAGE1 and PAGE2 selection is also part of the emulated machine state and
+can be controlled through the original Apple II soft switches at `$C054` and
+`$C055`.
+
+## Where it goes next
+
+The immediate goal is to finish the official NMOS 6502 instruction set and
+improve CPU correctness.
+
+Then comes more of the actual Apple II hardware:
+
+- remaining video soft switches
+- TEXT / GRAPHICS switching
+- MIXED mode
+- Lo-Res graphics
+- Hi-Res graphics
+- Disk II
+- DOS 3.3
+- CPU timing and ~1 MHz synchronization
+- speaker
+- joystick / paddles
+- color artifacting
+
+The exact order may change as real software starts exposing missing pieces of
+the machine.
+
+## The next big milestone
+
+One of the first major goals is to boot **DOS 3.3** and run a real Apple II
+assembler such as **Merlin**.
+
+The moment I can:
+
+```text
+Boot DOS 3.3
+      │
+      ▼
+Run Merlin
+      │
+      ▼
+Write 6502 code
+      │
+      ▼
+Assemble it
+      │
+      ▼
+Run it on the emulated Apple II
+```
+
+will be an important milestone.
+
+At that point, the emulator will no longer just run software.
+
+It will be able to run the tools used to **create Apple II software**.
+
+## Compatibility targets
+
+The first major game compatibility target is:
+
+### Choplifter
+
+The objective is not merely to reach the title screen.
+
+The objective is to make it **playable**.
+
+After that, some of the programs and games I would particularly like to use
+as compatibility targets include:
+
+- DROL
+- Spare Change
+- Karateka
+- Aztec
+- Airheart
+
+**Airheart is the long-term stress test.**
+
+If this emulator eventually runs Airheart correctly, a lot of things will
+have gone right along the way.
+
+## Longer-term goals
+
+The current focus is the original Apple II architecture and NMOS 6502.
+
+The architecture is intended to leave room for:
+
+- Apple IIe
+- auxiliary memory
+- 80-column mode
+- 65C02
+- Apple IIc
+
+Portability is also a long-term objective.
+
+Potential platforms include:
+
+- Windows
+- macOS
+- Linux
+- Web / WebAssembly
+
+iOS / iPadOS may eventually become a separate frontend project.
+
+For now, getting the Apple II itself right takes priority.
+
+## Why Odin?
+
+[Odin](https://odin-lang.org/) is a low-level systems programming language
+with a pleasantly C-like feel.
+
+It has turned out to be a particularly enjoyable fit for an emulator:
+explicit memory handling, simple data structures, little framework overhead,
+and a short path between understanding a piece of Apple II hardware and
+implementing it.
+
+This project is also how I am learning the language.
+
+So I am simultaneously learning a new programming language and rediscovering
+a computer I first used decades ago.
+
+That combination is a large part of the fun.
+
+## Development philosophy
+
+This is deliberately not a "write an emulator as fast as possible" project.
+
+The emulator is being built incrementally, usually in small development
+sessions.
+
+Whenever possible, each step introduces one new piece of the machine while
+leaving the emulator in a working state.
+
+There is still a lot missing.
+
+It is not cycle accurate.
+
+The CPU is not yet complete.
+
+There is no Disk II yet.
+
+There is no graphics mode yet.
+
+And there will certainly be plenty of surprises along the way.
+
+That's exactly why I'm building it.
+
+## Project status
+
+**Very experimental.**
+
+This is a personal learning project, not yet a production-quality or
+cycle-accurate Apple II emulator.
+
+The source code remains private for now.
+
+Progress, experiments and significant milestones will be documented here.
+
+But it boots.
+
+And it runs BASIC. :)

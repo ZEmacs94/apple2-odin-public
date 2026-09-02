@@ -18,18 +18,22 @@ I have known and used the Apple II for about 40 years.
 Building an emulator is turning out to be a surprisingly good way to discover
 how much I still didn't know about it.
 
+In a way, I knew this machine for forty years.
+
+I'm now discovering that I didn't know it nearly as well as I thought.
+
 The project is intentionally developed incrementally, usually in small
 sessions of around one hour.
 
 The objective is not to build an emulator as quickly as possible, but to
 understand the machine while building it.
 
+**The journey is really the point.**
+
 ## Current status
 
 The emulator can now boot a real Apple II ROM and run Applesoft BASIC
 interactively in an SDL3 window.
-
-For example, programs can be entered and executed directly:
 
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-basic.png)
 
@@ -37,6 +41,25 @@ For example, programs can be entered and executed directly:
 apple2-odin. The BASIC program, keyboard handling, execution and text output
 are all handled by the emulated machine.*
 
+For example, programs can be entered and executed directly:
+
+```basic
+]10 FOR I = 1 TO 10
+]20 PRINT I
+]30 NEXT I
+]RUN
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+]
+```
 
 The display is rendered using the original Apple II character generator ROM
 (341-0036), including normal, inverse and flashing characters.
@@ -44,13 +67,13 @@ The display is rendered using the original Apple II character generator ROM
 The emulator is already using original Apple II hardware mechanisms such as
 the keyboard soft switches and PAGE1/PAGE2 video selection.
 
-The NMOS 6502 core currently implements **118 of the 151 official opcode
+The NMOS 6502 core currently implements **119 of the 151 official opcode
 variants**.
 
 ## What is already working
 
 - NMOS 6502 CPU emulation
-- 118 / 151 official NMOS 6502 opcode variants
+- 119 / 151 official NMOS 6502 opcode variants
 - CPU registers, flags and stack
 - Multiple 6502 addressing modes
 - Apple II memory and bus
@@ -235,6 +258,71 @@ as compatibility targets include:
 
 If this emulator eventually runs Airheart correctly, a lot of things will
 have gone right along the way.
+
+## Development journal
+
+This project is as much about the journey as the final emulator.
+
+Rather than only documenting finished features, I want to keep some of the
+small discoveries, mistakes and unexpected moments that happen while building
+the machine.
+
+Not every development session will appear here.
+
+Only the moments worth remembering.
+
+### September 2, 2026 — BASIC finds a missing opcode
+
+By this point, the emulator could boot the original Apple II ROM and run
+Applesoft BASIC interactively.
+
+I wanted a slightly better screenshot for this README, so instead of simply
+typing `?1+1`, I entered a small BASIC program:
+
+```basic
+10 FOR I = 1 TO 10
+20 PRINT I
+30 NEXT I
+RUN
+```
+
+And the emulator stopped.
+
+Applesoft had encountered opcode `$FD`.
+
+`$FD` is `SBC Absolute,X`, one of the official 6502 opcode variants I had not
+implemented yet.
+
+This was a small moment, but a satisfying one.
+
+Instead of implementing an instruction because a checklist said it was
+missing, real Apple II software had just told me what it needed next.
+
+I implemented `$FD` and ran exactly the same program again.
+
+This time:
+
+```text
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+]
+```
+
+The screenshot at the top of this README is the result.
+
+**A screenshot intended to document the emulator had actually helped improve
+the emulator.**
+
+This is increasingly how I want to build it: let real software push the
+machine forward and teach me which details matter.
 
 ## Longer-term goals
 

@@ -67,13 +67,13 @@ The display is rendered using the original Apple II character generator ROM
 The emulator is already using original Apple II hardware mechanisms such as
 the keyboard soft switches and PAGE1/PAGE2 video selection.
 
-The NMOS 6502 core currently implements **119 of the 151 official opcode
+The NMOS 6502 core currently implements **128 of the 151 official opcode
 variants**.
 
 ## What is already working
 
 - NMOS 6502 CPU emulation
-- 119 / 151 official NMOS 6502 opcode variants
+- 128 / 151 official NMOS 6502 opcode variants
 - CPU registers, flags and stack
 - Multiple 6502 addressing modes
 - Apple II memory and bus
@@ -186,8 +186,9 @@ can be controlled through the original Apple II soft switches at `$C054` and
 
 ## Where it goes next
 
-The immediate goal is to finish the official NMOS 6502 instruction set and
-improve CPU correctness.
+With **128 of the 151 official NMOS 6502 opcode variants now implemented**,
+the immediate goal is to complete the remaining CPU instructions and improve
+6502 correctness.
 
 Then comes more of the actual Apple II hardware:
 

@@ -67,13 +67,13 @@ The display is rendered using the original Apple II character generator ROM
 The emulator is already using original Apple II hardware mechanisms such as
 the keyboard soft switches and PAGE1/PAGE2 video selection.
 
-The NMOS 6502 core currently implements **148 of the 151 official opcode
+The NMOS 6502 core currently implements **149 of the 151 official opcode
 variants**.
 
 ## What is already working
 
 - NMOS 6502 CPU emulation
-- 148 / 151 official NMOS 6502 opcode variants
+- 149 / 151 official NMOS 6502 opcode variants
 - CPU registers, flags and stack
 - Multiple 6502 addressing modes
 - Apple II memory and bus
@@ -186,7 +186,7 @@ can be controlled through the original Apple II soft switches at `$C054` and
 
 ## Where it goes next
 
-With **148 of the 151 official NMOS 6502 opcode variants now implemented**,
+With **149 of the 151 official NMOS 6502 opcode variants now implemented**,
 the immediate goal is to complete the remaining CPU instructions and improve
 6502 correctness.
 
@@ -324,6 +324,69 @@ the emulator.**
 
 This is increasingly how I want to build it: let real software push the
 machine forward and teach me which details matter.
+
+### September 7, 2026 — The JSR that never existed
+
+While implementing NMOS 6502 decimal mode, the same BASIC program that had
+helped uncover the missing `$FD` opcode suddenly stopped working again.
+
+This time the emulator eventually crashed on an unknown opcode in RAM.
+
+The obvious suspect was the new decimal-mode implementation.
+
+So I started tracing.
+
+The trace led to something strange: Applesoft appeared to execute:
+
+    JSR $F4F0
+
+That looked suspicious, but `$F4F0` was a perfectly valid address inside the
+original Apple II ROM. The code there executed normally for a while before
+eventually returning to nonsense in RAM.
+
+For some time, the investigation went through decimal ADC, SBC, the stack,
+JSR, RTS and PLA.
+
+All of them turned out to be innocent.
+
+The real Apple II ROM contained this:
+
+    D572  70 04     BVS $D578
+    D574  C9 20     CMP #$20
+    D576  F0 F4     BEQ $D56C
+
+A recent refactoring of `BVS` had accidentally caused its relative offset to
+be fetched twice.
+
+That single extra byte changed everything.
+
+The `$C9` opcode was skipped, leaving the `$20` operand of `CMP #$20` to be
+interpreted as an opcode.
+
+And `$20` happens to be `JSR`.
+
+The next two bytes were `$F0 $F4`.
+
+So the emulator saw:
+
+    20 F0 F4
+
+and quite correctly executed:
+
+    JSR $F4F0
+
+The most misleading part was that `$F4F0` really did contain valid Apple II
+ROM code. Instead of crashing immediately, the emulator wandered into a real
+ROM routine, executed plausible instructions, and only failed later.
+
+The decimal-mode implementation had nothing to do with it.
+
+One relative branch had simply consumed its operand twice.
+
+It was a good reminder that while building an emulator, the most interesting
+bugs are not always the ones that immediately break the machine.
+
+Sometimes a bug creates a perfectly plausible machine that never existed.
 
 ## Longer-term goals
 

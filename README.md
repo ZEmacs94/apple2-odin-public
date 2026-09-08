@@ -67,13 +67,13 @@ The display is rendered using the original Apple II character generator ROM
 The emulator is already using original Apple II hardware mechanisms such as
 the keyboard soft switches and PAGE1/PAGE2 video selection.
 
-The NMOS 6502 core currently implements **149 of the 151 official opcode
+The NMOS 6502 core currently implements **all 151 official opcode
 variants**.
 
 ## What is already working
 
 - NMOS 6502 CPU emulation
-- 149 / 151 official NMOS 6502 opcode variants
+- All 151 official NMOS 6502 opcode variants
 - CPU registers, flags and stack
 - Multiple 6502 addressing modes
 - Apple II memory and bus
@@ -186,9 +186,11 @@ can be controlled through the original Apple II soft switches at `$C054` and
 
 ## Where it goes next
 
-With **149 of the 151 official NMOS 6502 opcode variants now implemented**,
-the immediate goal is to complete the remaining CPU instructions and improve
-6502 correctness.
+With **all 151 official NMOS 6502 opcode variants now implemented**, the next
+step is not adding more instructions, but making the CPU more faithful.
+
+That means checking some of the less obvious NMOS 6502 behaviors and preparing
+the core for proper timing.
 
 Then comes more of the actual Apple II hardware:
 
@@ -388,6 +390,32 @@ bugs are not always the ones that immediately break the machine.
 
 Sometimes a bug creates a perfectly plausible machine that never existed.
 
+### September 8, 2026 — 151 out of 151
+
+On a train to Paris, with a couple of hours ahead of me, it felt like the
+perfect time to finish the 6502.
+
+The last two official NMOS 6502 opcodes missing from the emulator were
+`BRK` and `RTI`.
+
+They were a fitting pair to finish with, because implementing them was not
+just a matter of adding two entries to the opcode table.
+
+I built a small test that executed `BRK`, followed the IRQ/BRK vector,
+checked the return address and processor status pushed onto the stack,
+executed `RTI`, and verified that execution resumed at exactly the right
+address.
+
+It worked.
+
+With that, the emulator now implements **all 151 official NMOS 6502 opcode
+variants**.
+
+That does not mean the CPU is finished. Timing is not cycle accurate yet,
+and there are still NMOS 6502 edge cases to verify.
+
+But one chapter is complete.
+
 ## Longer-term goals
 
 The current focus is the original Apple II architecture and NMOS 6502.
@@ -442,9 +470,10 @@ leaving the emulator in a working state.
 
 There is still a lot missing.
 
-It is not cycle accurate.
+All 151 official NMOS 6502 opcode variants are implemented.
 
-The CPU is not yet complete.
+But the CPU is not cycle accurate yet, and some NMOS 6502 edge cases still
+need to be verified.
 
 There is no Disk II yet.
 

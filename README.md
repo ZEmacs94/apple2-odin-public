@@ -76,6 +76,7 @@ variants**.
 - All 151 official NMOS 6502 opcode variants
 - CPU registers, flags and stack
 - Multiple 6502 addressing modes
+- NMOS 6502 indirect JMP page-boundary behavior
 - Apple II memory and bus
 - ROM loading and RESET vector handling
 - Boot of a real Apple II ROM
@@ -415,6 +416,36 @@ That does not mean the CPU is finished. Timing is not cycle accurate yet,
 and there are still NMOS 6502 edge cases to verify.
 
 But one chapter is complete.
+
+### September 10, 2026 — Making the 6502 a little more 6502
+
+With all 151 official NMOS 6502 opcode variants implemented, the next step
+was not adding instructions, but making the CPU behave a little more like
+the original silicon.
+
+One famous NMOS 6502 quirk is the indirect `JMP` page-boundary bug.
+
+For `JMP ($12FF)`, a normal 16-bit read would fetch the low byte from `$12FF`
+and the high byte from `$1300`.
+
+The NMOS 6502 does not.
+
+It reads the high byte from `$1200` instead.
+
+I added a dedicated indirect `JMP` word reader to reproduce that behavior,
+then tested both the normal and page-boundary cases:
+
+```text
+JMP ($1234) -> $5678
+JMP ($12FF) -> $5634
+```
+
+While checking the other indirect addressing modes, I discovered that their
+Zero Page wraparound behavior was already correctly implemented.
+
+No new opcode today.
+
+Just a slightly more authentic 6502.
 
 ## Longer-term goals
 

@@ -87,7 +87,8 @@ variants**.
 - Original Apple II character generator ROM
 - Normal, inverse and flashing text
 - PAGE1 / PAGE2 video selection
-- Apple II video soft switches
+- Apple II video soft switches for TEXT, GRAPHICS, MIXED and PAGE1/PAGE2
+- Mixed-mode text region (bottom four rows)
 - SDL3 interactive frontend
 - BASIC program execution and screen scrolling
 

@@ -71,6 +71,13 @@ Lo-Res graphics are now rendered directly from Apple II video memory in 16
 colors, including mixed graphics/text mode. Applesoft BASIC can use `GR`,
 `COLOR=`, `PLOT`, `HLIN` and `VLIN` to draw through the emulated machine.
 
+Hi-Res graphics are also working in a first monochrome implementation. The
+renderer decodes the original Apple II Hi-Res memory layout at 280×192,
+supports PAGE1/PAGE2 and mixed mode, and renders graphics produced by Applesoft
+`HGR`, `HCOLOR=` and `HPLOT` through emulated video memory.
+
+![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
+
 The NMOS 6502 core currently implements **all 151 official opcode
 variants**.
 
@@ -96,7 +103,11 @@ variants**.
 - 40×48 Apple II Lo-Res graphics
 - 16-color Lo-Res rendering
 - Mixed Lo-Res graphics with four text rows at the bottom
-- Applesoft graphics commands rendering through emulated video memory
+- Applesoft Lo-Res graphics commands rendering through emulated video memory
+- 280×192 Apple II Hi-Res graphics (monochrome first implementation)
+- Hi-Res PAGE1 / PAGE2 addressing
+- Mixed Hi-Res graphics with four text rows at the bottom
+- Applesoft `HGR`, `HCOLOR=` and `HPLOT` rendering through emulated Hi-Res memory
 - SDL3 interactive frontend
 - BASIC program execution and screen scrolling
 
@@ -118,7 +129,7 @@ Physical keyboard
 | ROM              |
 | Keyboard I/O     |
 | Video state      |
-| Text / Lo-Res    |
+| Video rendering  |
 +--------+---------+
          │
          ▼
@@ -204,17 +215,12 @@ the core for proper timing.
 
 Then comes more of the actual Apple II hardware:
 
-- remaining video soft switches
-- TEXT / GRAPHICS switching
-- MIXED mode
-- Lo-Res graphics
-- Hi-Res graphics
+- Hi-Res artifact color
 - Disk II
 - DOS 3.3
 - CPU timing and ~1 MHz synchronization
 - speaker
 - joystick / paddles
-- color artifacting
 
 The exact order may change as real software starts exposing missing pieces of
 the machine.
@@ -456,6 +462,79 @@ No new opcode today.
 
 Just a slightly more authentic 6502.
 
+## First Hi-Res graphics
+
+Hi-Res turned out to be a very different step from Lo-Res.
+
+An Apple II Hi-Res page occupies 8 KB, but its 192 scanlines are not stored
+consecutively. The address of a scanline is built from different groups of bits
+in the vertical coordinate, producing the characteristic interleaved Apple II
+memory layout.
+
+Each byte contributes seven visible pixels, giving a logical resolution of
+280×192. For the first implementation, bit 7 and composite artifact color are
+deliberately ignored: the goal was first to validate the memory layout and pixel
+decoder in monochrome.
+
+The first test wrote `$7F` directly to `$2000`, producing seven white pixels at
+the top-left of the screen. The same path was then tested from Applesoft:
+
+```basic
+HGR
+POKE 8192,127
+```
+
+That worked too.
+
+The next test was more interesting:
+
+```basic
+HGR
+HPLOT 0,0
+```
+
+The screen remained black.
+
+A targeted CPU and memory trace showed that Applesoft was reaching the correct
+Hi-Res address and executing its plotting routine correctly. The final write to
+`$2000` was simply writing `$00`.
+
+The emulator was not broken.
+
+Applesoft was drawing in black.
+
+With an explicit color:
+
+```basic
+HGR
+HCOLOR=3
+HPLOT 0,0 TO 279,159
+HPLOT 0,159 TO 279,0
+```
+
+the first real Hi-Res image appeared: two white diagonals crossing the graphics
+area.
+
+The complete path is now:
+
+```text
+Applesoft HGR / HCOLOR= / HPLOT
+        -> Applesoft ROM
+        -> emulated 6502
+        -> Apple II bus / Hi-Res RAM
+        -> Hi-Res address decoder
+        -> seven-pixel byte decoder
+        -> SDL3
+```
+
+As with Lo-Res, the frontend is not drawing a synthetic approximation of the
+result. Applesoft itself modifies the emulated Apple II video memory, and the
+renderer interprets that memory.
+
+Sometimes a black screen means the emulator is broken.
+
+Sometimes the Apple II is simply drawing black. :)
+
 ## Longer-term goals
 
 The current focus is the original Apple II architecture and NMOS 6502.
@@ -544,7 +623,7 @@ need to be verified.
 
 There is no Disk II yet.
 
-Lo-Res graphics are working; Hi-Res graphics are the next major video step.
+Lo-Res graphics and monochrome Hi-Res graphics are working; authentic Hi-Res artifact color is the next major video step.
 
 And there will certainly be plenty of surprises along the way.
 
@@ -563,4 +642,6 @@ Progress, experiments and significant milestones will be documented here.
 
 But it boots.
 
-And it runs BASIC. :)
+It runs BASIC.
+
+And now BASIC can draw in Hi-Res. :)

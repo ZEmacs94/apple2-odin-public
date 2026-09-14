@@ -80,6 +80,11 @@ memory.
 
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
 
+The first Disk II controller work has also started. The slot 6 I/O range
+`$C0E0-$C0EF` is now routed through the Apple II bus, with controller state for
+the four stepper phases, motor control, drive selection and Q6/Q7. Disk images,
+head movement and sector reading are not implemented yet.
+
 The NMOS 6502 core currently implements **all 151 official opcode
 variants**.
 
@@ -113,6 +118,9 @@ variants**.
 - Hi-Res artifact-color approximation: green, purple, blue and orange
 - Hi-Res phase-bit and absolute pixel-parity decoding
 - Neighbor-aware Hi-Res decoding for white and artifact colors
+- Initial Disk II controller state
+- Slot 6 Disk II soft switches (`$C0E0-$C0EF`)
+- Disk II stepper phases, motor control, drive selection and Q6/Q7
 - SDL3 interactive frontend
 - BASIC program execution and screen scrolling
 
@@ -639,6 +647,34 @@ And the debugging lesson was memorable:
 
 For a machine whose colors depend on odd and even pixels, that mattered. :)
 
+## The Disk II enters the machine
+
+The next hardware chapter has started with the Disk II controller.
+
+Rather than beginning with disk-image formats or DOS sectors, the first step was
+to model the controller as hardware owned by the Apple II. Accesses to the
+standard slot 6 range `$C0E0-$C0EF` are now routed by the machine bus to the
+Disk II module.
+
+Those sixteen switches currently control the four stepper-motor phases, motor
+state, selected drive and Q6/Q7:
+
+```text
+$C0E0-$C0E7  stepper phases 0-3
+$C0E8-$C0E9  motor
+$C0EA-$C0EB  drive selection
+$C0EC-$C0EF  Q6 / Q7
+```
+
+The first tests validate the controller state and the complete bus-to-device
+path.
+
+There is deliberately no disk reading yet. The next step is to understand how
+the phase lines move the physical read/write head before deciding how to model
+that movement.
+
+For the first time, though, the emulated Apple II has a Disk II controller. :)
+
 ## Longer-term goals
 
 The current focus is the original Apple II architecture and NMOS 6502.
@@ -725,7 +761,7 @@ All 151 official NMOS 6502 opcode variants are implemented.
 But the CPU is not cycle accurate yet, and some NMOS 6502 edge cases still
 need to be verified.
 
-There is no Disk II yet.
+Initial Disk II controller emulation has started, but there is no disk reading yet.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 

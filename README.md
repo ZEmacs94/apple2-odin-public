@@ -71,10 +71,12 @@ Lo-Res graphics are now rendered directly from Apple II video memory in 16
 colors, including mixed graphics/text mode. Applesoft BASIC can use `GR`,
 `COLOR=`, `PLOT`, `HLIN` and `VLIN` to draw through the emulated machine.
 
-Hi-Res graphics are also working in a first monochrome implementation. The
-renderer decodes the original Apple II Hi-Res memory layout at 280×192,
-supports PAGE1/PAGE2 and mixed mode, and renders graphics produced by Applesoft
-`HGR`, `HCOLOR=` and `HPLOT` through emulated video memory.
+Hi-Res graphics now include a first digital approximation of the Apple II's
+artifact colors. The renderer decodes the original 280×192 Hi-Res memory layout,
+supports PAGE1/PAGE2 and mixed mode, and interprets the phase bit, absolute pixel
+parity and neighboring pixels to produce black, white, green, purple, blue and
+orange. Applesoft `HGR`, `HCOLOR=` and `HPLOT` all render through emulated video
+memory.
 
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
 
@@ -104,10 +106,13 @@ variants**.
 - 16-color Lo-Res rendering
 - Mixed Lo-Res graphics with four text rows at the bottom
 - Applesoft Lo-Res graphics commands rendering through emulated video memory
-- 280×192 Apple II Hi-Res graphics (monochrome first implementation)
+- 280×192 Apple II Hi-Res graphics
 - Hi-Res PAGE1 / PAGE2 addressing
 - Mixed Hi-Res graphics with four text rows at the bottom
 - Applesoft `HGR`, `HCOLOR=` and `HPLOT` rendering through emulated Hi-Res memory
+- Hi-Res artifact-color approximation: green, purple, blue and orange
+- Hi-Res phase-bit and absolute pixel-parity decoding
+- Neighbor-aware Hi-Res decoding for white and artifact colors
 - SDL3 interactive frontend
 - BASIC program execution and screen scrolling
 
@@ -215,7 +220,6 @@ the core for proper timing.
 
 Then comes more of the actual Apple II hardware:
 
-- Hi-Res artifact color
 - Disk II
 - DOS 3.3
 - CPU timing and ~1 MHz synchronization
@@ -535,6 +539,106 @@ Sometimes a black screen means the emulator is broken.
 
 Sometimes the Apple II is simply drawing black. :)
 
+## Hi-Res artifact color
+
+The monochrome Hi-Res renderer proved that the memory layout and seven-pixel
+byte decoder were correct.
+
+The next step was the part that makes Apple II graphics much more interesting:
+color.
+
+Apple II Hi-Res memory does not store a conventional color value for each
+pixel. Bits 0-6 of each byte represent seven pixel positions, while bit 7 shifts
+the color phase. The apparent color also depends on the pixel's absolute
+horizontal position and on neighboring pixels.
+
+The first implementation deliberately models this digitally rather than trying
+to simulate the complete NTSC composite signal:
+
+```text
+phase 0 -> purple / green
+phase 1 -> blue / orange
+adjacent lit pixels -> white
+unlit pixels -> black
+```
+
+One architectural rule became important very quickly: the Apple II video layer
+needs to work with **logical Apple II coordinates**, while SDL only needs scaled
+host coordinates.
+
+The distinction sounds obvious in retrospect.
+
+It was not obvious enough in the first version.
+
+The renderer initially calculated:
+
+```odin
+x := (col * 7 + bit) * PIXEL_SCALE
+```
+
+and passed that same `x` to the artifact-color decoder.
+
+With `PIXEL_SCALE = 2`, every value of `x` was even.
+
+That meant the emulator could never see an odd Apple II pixel position.
+
+Purple and blue appeared.
+
+Green and orange did not.
+
+The bug became obvious while copying the renderer code for discussion. The fix
+was simply to keep the two coordinate systems separate:
+
+```odin
+pixel_x := col * 7 + bit
+x := pixel_x * PIXEL_SCALE
+```
+
+`pixel_x` is used by the Apple II color logic.
+
+`x` is used by SDL.
+
+That small distinction immediately brought back both missing artifact colors.
+
+The phase information itself also comes from bit 7 of the Hi-Res byte:
+
+```odin
+phase_shift := (hires_value & 0x80) != 0
+```
+
+and neighboring lit pixels are used to produce white.
+
+The result was validated from Applesoft BASIC using all eight `HCOLOR` values:
+
+```basic
+HGR
+FOR C=0 TO 7
+HCOLOR=C
+Y=10+C*18
+HPLOT 20,Y TO 120,Y
+NEXT C
+```
+
+The expected families now appear: black, green, purple, white, black, orange,
+blue and white.
+
+Mixed-mode text exposed one more small rendering leak: the bottom four text
+rows could inherit the last graphics color left in the SDL renderer. Text color
+is now selected explicitly, keeping normal text green and mixed-mode text white.
+
+This is still a deliberately simple artifact-color model. A real composite
+display blends the underlying pixel patterns into more continuous colors, so a
+future NTSC/composite renderer could go much further.
+
+For now, though, the digital Apple II Hi-Res representation is finally producing
+the colors that made the machine look the way it did.
+
+And the debugging lesson was memorable:
+
+**With a display scale of two, every screen coordinate was even.**
+
+For a machine whose colors depend on odd and even pixels, that mattered. :)
+
 ## Longer-term goals
 
 The current focus is the original Apple II architecture and NMOS 6502.
@@ -623,7 +727,7 @@ need to be verified.
 
 There is no Disk II yet.
 
-Lo-Res graphics and monochrome Hi-Res graphics are working; authentic Hi-Res artifact color is the next major video step.
+Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 
 And there will certainly be plenty of surprises along the way.
 
@@ -644,4 +748,4 @@ But it boots.
 
 It runs BASIC.
 
-And now BASIC can draw in Hi-Res. :)
+And now BASIC can draw in Hi-Res color. :)

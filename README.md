@@ -80,10 +80,11 @@ memory.
 
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
 
-The first Disk II controller work has also started. The slot 6 I/O range
-`$C0E0-$C0EF` is now routed through the Apple II bus, with controller state for
-the four stepper phases, motor control, drive selection and Q6/Q7. Disk images,
-head movement and sector reading are not implemented yet.
+The Disk II controller work now includes physical head movement. The slot 6 I/O
+range `$C0E0-$C0EF` is routed through the Apple II bus, with controller state for
+the four stepper phases, motor control, drive selection and Q6/Q7. Phase
+transitions now move a modeled read/write head in quarter-track units across the
+35 standard DOS tracks. Disk images and sector reading are not implemented yet.
 
 The NMOS 6502 core currently implements **all 151 official opcode
 variants**.
@@ -121,6 +122,8 @@ variants**.
 - Initial Disk II controller state
 - Slot 6 Disk II soft switches (`$C0E0-$C0EF`)
 - Disk II stepper phases, motor control, drive selection and Q6/Q7
+- Disk II quarter-track head positioning driven by phase transitions
+- Disk II head movement limits and bidirectional stepping
 - SDL3 interactive frontend
 - BASIC program execution and screen scrolling
 
@@ -669,11 +672,36 @@ $C0EC-$C0EF  Q6 / Q7
 The first tests validate the controller state and the complete bus-to-device
 path.
 
-There is deliberately no disk reading yet. The next step is to understand how
-the phase lines move the physical read/write head before deciding how to model
-that movement.
+The next step was to make those phase lines move a modeled physical head. The
+head position is now stored in quarter-track units:
 
-For the first time, though, the emulated Apple II has a Disk II controller. :)
+```text
+0   = track 0.00
+1   = track 0.25
+2   = track 0.50
+3   = track 0.75
+4   = track 1.00
+...
+136 = track 34.00
+```
+
+Movement is derived from neighboring stepper-phase transitions rather than from
+an abstract "next track" operation. Intermediate two-phase states therefore
+produce quarter-track movement, and reversing the phase sequence reverses the
+head direction. The current model also enforces the physical limits at positions
+0 and 136.
+
+A simple round-trip test now produces:
+
+```text
+20 -> 21 -> 22 -> 23 -> 24
+24 -> 23 -> 22 -> 21 -> 20
+```
+
+through the Disk II soft switches.
+
+There is deliberately no disk reading yet. Before reading a disk image, the
+emulator first learned how to move the head that will eventually read it. :)
 
 ## Longer-term goals
 
@@ -761,7 +789,8 @@ All 151 official NMOS 6502 opcode variants are implemented.
 But the CPU is not cycle accurate yet, and some NMOS 6502 edge cases still
 need to be verified.
 
-Initial Disk II controller emulation has started, but there is no disk reading yet.
+Disk II controller emulation now includes stepper-driven quarter-track head
+movement, but there is no disk reading yet.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 

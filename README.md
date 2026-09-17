@@ -78,6 +78,11 @@ parity and neighboring pixels to produce black, white, green, purple, blue and
 orange. Applesoft `HGR`, `HCOLOR=` and `HPLOT` all render through emulated video
 memory.
 
+The SDL3 frontend now renders the Apple II in its native **280×192 logical
+coordinate space**. SDL3 handles presentation to the host window adaptively,
+preserving the original aspect ratio while keeping Apple II pixel coordinates
+independent from display scaling.
+
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
 
 The Disk II controller work now includes physical head movement. The slot 6 I/O
@@ -119,12 +124,15 @@ variants**.
 - Hi-Res artifact-color approximation: green, purple, blue and orange
 - Hi-Res phase-bit and absolute pixel-parity decoding
 - Neighbor-aware Hi-Res decoding for white and artifact colors
+- Native 280×192 logical rendering independent from host display scaling
+- Adaptive SDL3 presentation with aspect-ratio-preserving letterboxing
 - Initial Disk II controller state
 - Slot 6 Disk II soft switches (`$C0E0-$C0EF`)
 - Disk II stepper phases, motor control, drive selection and Q6/Q7
 - Disk II quarter-track head positioning driven by phase transitions
 - Disk II head movement limits and bidirectional stepping
 - SDL3 interactive frontend
+- Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
 
 ## Architecture
@@ -165,7 +173,10 @@ Apple II emulation contains no SDL-specific logic.
 Keeping these layers separate should make other frontends and platforms
 possible later.
 
-For now, however, **Windows is the primary development platform**.
+That separation has now been validated on a second host platform: on
+September 16, 2026, the emulator was built and run natively on an Apple Silicon
+M5 Mac without any change to the emulation core. Development can now move
+between Windows and macOS.
 
 ## Milestone #1 — From nothing to "HI"
 
@@ -703,6 +714,25 @@ through the Disk II soft switches.
 There is deliberately no disk reading yet. Before reading a disk image, the
 emulator first learned how to move the head that will eventually read it. :)
 
+## September 2026 — Native Apple Silicon and adaptive display
+
+On September 16, the emulator was built and run natively on an Apple Silicon
+M5 Mac for the first time.
+
+No changes to the 6502 core or Apple II hardware model were required. Only the
+host build environment and SDL3 setup needed platform-specific attention,
+providing a first practical validation of the separation between the emulated
+machine and its frontend.
+
+The display path was then simplified around the Apple II's native 280×192
+logical coordinate space. Text, Lo-Res and Hi-Res now render in machine
+coordinates, while SDL3 is responsible for adapting that image to the host
+window and preserving its aspect ratio.
+
+This also reinforces a lesson learned during artifact-color work: Apple II
+coordinates belong to the emulated machine; display scaling belongs to the
+frontend.
+
 ## Longer-term goals
 
 The current focus is the original Apple II architecture and NMOS 6502.
@@ -715,12 +745,13 @@ The architecture is intended to leave room for:
 - 65C02
 - Apple IIc
 
-Portability is also a long-term objective.
+Portability is also a long-term objective, with native Windows and macOS /
+Apple Silicon builds now working.
 
-Potential platforms include:
+Current and potential platforms include:
 
-- Windows
-- macOS
+- Windows — working
+- macOS / Apple Silicon — working
 - Linux
 - Web / WebAssembly
 
@@ -793,6 +824,10 @@ Disk II controller emulation now includes stepper-driven quarter-track head
 movement, but there is no disk reading yet.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
+
+The SDL3 frontend now presents the machine from a native 280×192 logical
+viewport, and the same codebase runs natively on Windows and macOS / Apple
+Silicon.
 
 And there will certainly be plenty of surprises along the way.
 

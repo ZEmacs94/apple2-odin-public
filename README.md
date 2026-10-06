@@ -85,11 +85,13 @@ independent from display scaling.
 
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
 
-The Disk II controller work now includes physical head movement. The slot 6 I/O
-range `$C0E0-$C0EF` is routed through the Apple II bus, with controller state for
-the four stepper phases, motor control, drive selection and Q6/Q7. Phase
-transitions now move a modeled read/write head in quarter-track units across the
-35 standard DOS tracks. Disk images and sector reading are not implemented yet.
+The Disk II model now includes two independent drives, motor control, drive
+selection, Q6/Q7, and physical head movement in quarter-track units. Rotation is
+driven by elapsed 6502 cycles, each drive maintains its own rotational position,
+and the selected drive feeds a controller data latch as bytes pass under the
+head. Synthetic track data can now travel from a rotating disk through the
+controller to the Apple II bus. Real disk-image loading and nibblization are the
+next step.
 
 The NMOS 6502 core currently implements **all 151 official opcode
 variants**.
@@ -131,6 +133,12 @@ variants**.
 - Disk II stepper phases, motor control, drive selection and Q6/Q7
 - Disk II quarter-track head positioning driven by phase transitions
 - Disk II head movement limits and bidirectional stepping
+- CPU instruction cycle reporting for peripheral timing
+- Independent rotational state for both Disk II drives
+- CPU-cycle-driven Disk II rotation
+- Disk II track-byte positioning and wraparound
+- Disk II controller data latch fed by the selected rotating drive
+- Synthetic track bytes reaching the Apple II bus
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -234,17 +242,19 @@ can be controlled through the original Apple II soft switches at `$C054` and
 
 ## Where it goes next
 
-With **all 151 official NMOS 6502 opcode variants now implemented**, the next
-step is not adding more instructions, but making the CPU more faithful.
+With **all 151 official NMOS 6502 opcode variants now implemented**, CPU work
+has moved beyond instruction coverage into timing and hardware interaction.
 
-That means checking some of the less obvious NMOS 6502 behaviors and preparing
-the core for proper timing.
+Instructions now report elapsed cycles, including the dynamic timing needed by
+branches and indexed page crossings. That timing is already being consumed by
+the Disk II model to drive disk rotation.
 
-Then comes more of the actual Apple II hardware:
+The next major hardware steps are:
 
-- Disk II
-- DOS 3.3
-- CPU timing and ~1 MHz synchronization
+- real `.dsk` image loading
+- DOS 3.3 sector ordering and Disk II nibblization
+- booting DOS 3.3 through the emulated controller
+- further CPU timing and ~1 MHz synchronization work
 - speaker
 - joystick / paddles
 
@@ -711,8 +721,103 @@ A simple round-trip test now produces:
 
 through the Disk II soft switches.
 
-There is deliberately no disk reading yet. Before reading a disk image, the
-emulator first learned how to move the head that will eventually read it. :)
+That completed the mechanical head-positioning step.
+
+The next step was to make the disk itself move.
+
+### October 6, 2026 — The disk starts spinning
+
+
+Getting here took slightly longer than expected.
+
+Before fighting the Disk II, I first spent a fair amount of time fighting
+something considerably more modern: Windows and macOS.
+
+I wanted the same project to build and debug cleanly on both machines, with
+Windows remaining my main development environment and the Mac becoming a
+second native target. What sounded like a small tooling exercise turned into
+the usual collection of shell differences, build paths, SDL setup, debugger
+configuration and the occasional moment where the executable being debugged
+was not, in fact, the executable I had just built.
+
+Eventually, Windows and macOS agreed to coexist.
+
+The Disk II then decided it was its turn.
+
+What looked like a fairly innocent next step — make the disk rotate according
+to CPU cycles — led through instruction timing, fractional rotational
+accumulators, two independently spinning drives, controller latches, media
+ownership, pointer semantics and, for good measure, a Windows stack overflow
+caused by accidentally putting half a megabyte of disk tracks inside every
+local Apple II instance.
+
+At some point, making a 1977 floppy-disk controller work started to feel easier
+than making two computers from 2026 agree on how to build it.
+
+But eventually both battles were won.
+
+
+The 6502 `step()` function now reports the number of cycles consumed by each
+instruction. Those cycles are passed to the Disk II, where an integer
+accumulator converts elapsed CPU time into movement through the encoded track:
+
+```text
+6502 instruction
+    -> elapsed CPU cycles
+    -> Disk II rotation
+    -> track byte position
+    -> byte passing under the head
+```
+
+The current model uses approximately 204,600 CPU cycles per 300 RPM revolution
+and 6,250 encoded bytes per track revolution. Fractional progress is preserved
+between instructions, avoiding floating-point timing and cumulative rounding
+loss.
+
+Both drives have independent mechanical state. They can therefore rotate at the
+same time, regardless of which one is selected. Drive selection determines
+which rotating medium is connected to the controller.
+
+A data latch now sits between the selected drive and the Apple II bus. When
+rotation advances to a new byte under the selected head, that byte is loaded
+into the latch. CPU reads expose the latch rather than directly inspecting the
+track.
+
+A synthetic two-drive test demonstrates the distinction:
+
+```text
+before: drive1=1234 drive2=2234 latch=$D5
+after : drive1=1235 drive2=2235 latch=$AA
+```
+
+Both disks advanced. Drive 2 reached `$AB`, but because drive 1 was selected,
+only drive 1's `$AA` reached the controller latch.
+
+This work also exposed an architectural issue. Embedding every track directly
+inside each drive made a local `AppleII` instance more than half a megabyte and
+caused a Windows stack overflow. Track storage is now referenced separately and
+will be allocated only when media is inserted. A `nil` track pointer naturally
+represents an empty drive.
+
+There is still no real `.dsk` image in the drive.
+
+But the path now exists:
+
+```text
+CPU cycles
+    -> rotating disk
+    -> selected drive
+    -> byte under the head
+    -> controller data latch
+    -> Apple II bus
+    -> CPU
+```
+
+The next step is no longer to teach the drive how to move.
+
+It is to give it a disk.
+
+Preferably without another stack overflow. :)
 
 ## September 2026 — Native Apple Silicon and adaptive display
 
@@ -817,11 +922,14 @@ There is still a lot missing.
 
 All 151 official NMOS 6502 opcode variants are implemented.
 
-But the CPU is not cycle accurate yet, and some NMOS 6502 edge cases still
-need to be verified.
+The CPU is not fully cycle accurate yet, and some NMOS 6502 edge cases still
+need to be verified, but instruction execution now reports elapsed cycles for
+peripheral timing.
 
-Disk II controller emulation now includes stepper-driven quarter-track head
-movement, but there is no disk reading yet.
+Disk II emulation now includes two independent drives, stepper-driven
+quarter-track head movement, CPU-cycle-driven rotation, track-byte positioning
+and a controller data latch. Synthetic bytes can reach the Apple II bus; real
+`.dsk` image loading and nibblization come next.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 

@@ -89,9 +89,10 @@ The Disk II model now includes two independent drives, motor control, drive
 selection, Q6/Q7, and physical head movement in quarter-track units. Rotation is
 driven by elapsed 6502 cycles, each drive maintains its own rotational position,
 and the selected drive feeds a controller data latch as bytes pass under the
-head. Synthetic track data can now travel from a rotating disk through the
-controller to the Apple II bus. Real disk-image loading and nibblization are the
-next step.
+head. Real DOS 3.3 `.dsk` images can now be loaded, converted into nibblized
+6-and-2 tracks, inserted into a drive and rotated under the emulated read head.
+Bytes originating in a real disk image can now reach the Apple II bus through
+the controller data latch.
 
 The NMOS 6502 core currently implements **all 151 official opcode
 variants**.
@@ -138,7 +139,16 @@ variants**.
 - CPU-cycle-driven Disk II rotation
 - Disk II track-byte positioning and wraparound
 - Disk II controller data latch fed by the selected rotating drive
-- Synthetic track bytes reaching the Apple II bus
+- DOS 3.3 `.dsk` image loading
+- 35-track / 16-sector / 256-byte sector image representation
+- DOS 3.3 sector ordering
+- Disk II 4-and-4 address encoding
+- Disk II 6-and-2 data encoding and checksum
+- Complete address and data fields with synchronization gaps
+- 6,250-byte nibblized track generation
+- Nibblization of all 35 tracks from a real disk image
+- Disk insertion and ejection with media-owned track storage
+- Real nibblized disk bytes reaching the controller data latch through CPU-cycle-driven rotation
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -251,9 +261,8 @@ the Disk II model to drive disk rotation.
 
 The next major hardware steps are:
 
-- real `.dsk` image loading
-- DOS 3.3 sector ordering and Disk II nibblization
 - booting DOS 3.3 through the emulated controller
+- refining Disk II controller behavior as real boot code exposes missing details
 - further CPU timing and ~1 MHz synchronization work
 - speaker
 - joystick / paddles
@@ -725,6 +734,25 @@ That completed the mechanical head-positioning step.
 
 The next step was to make the disk itself move.
 
+## September 2026 — Native Apple Silicon and adaptive display
+
+On September 16, the emulator was built and run natively on an Apple Silicon
+M5 Mac for the first time.
+
+No changes to the 6502 core or Apple II hardware model were required. Only the
+host build environment and SDL3 setup needed platform-specific attention,
+providing a first practical validation of the separation between the emulated
+machine and its frontend.
+
+The display path was then simplified around the Apple II's native 280×192
+logical coordinate space. Text, Lo-Res and Hi-Res now render in machine
+coordinates, while SDL3 is responsible for adapting that image to the host
+window and preserving its aspect ratio.
+
+This also reinforces a lesson learned during artifact-color work: Apple II
+coordinates belong to the emulated machine; display scaling belongs to the
+frontend.
+
 ### October 6, 2026 — The disk starts spinning
 
 
@@ -819,24 +847,129 @@ It is to give it a disk.
 
 Preferably without another stack overflow. :)
 
-## September 2026 — Native Apple Silicon and adaptive display
+### October 7, 2026 — Giving the drive a disk
 
-On September 16, the emulator was built and run natively on an Apple Silicon
-M5 Mac for the first time.
+The drive now has one.
 
-No changes to the 6502 core or Apple II hardware model were required. Only the
-host build environment and SDL3 setup needed platform-specific attention,
-providing a first practical validation of the separation between the emulated
-machine and its frontend.
+A standard DOS 3.3 `.dsk` image is 143,360 bytes: 35 tracks, 16 sectors per
+track and 256 bytes per sector. The emulator can now load that image and turn
+its sector data into the encoded byte stream expected on a Disk II track.
 
-The display path was then simplified around the Apple II's native 280×192
-logical coordinate space. Text, Lo-Res and Hi-Res now render in machine
-coordinates, while SDL3 is responsible for adapting that image to the host
-window and preserving its aspect ratio.
+That conversion includes:
 
-This also reinforces a lesson learned during artifact-color work: Apple II
-coordinates belong to the emulated machine; display scaling belongs to the
-frontend.
+```text
+.dsk sector data
+    -> DOS 3.3 sector ordering
+    -> 4-and-4 address encoding
+    -> address fields
+    -> 6-and-2 data encoding
+    -> data fields and checksum
+    -> synchronization gaps
+    -> 6,250-byte nibblized track
+```
+
+The first real sector read from the image was track 0, sector 0. Its first
+bytes looked reassuringly like 6502 boot code:
+
+```text
+01 38 B0 03 4C 32 A1 86 43 C9 03 08 8A 29 70 4A
+```
+
+Address fields use the familiar Disk II prologue:
+
+```text
+D5 AA 96
+```
+
+and data fields begin with:
+
+```text
+D5 AA AD
+```
+
+The 256 bytes of sector data are transformed through 6-and-2 encoding into the
+disk-safe byte values used by the controller. Address fields, data fields and
+gaps are then assembled into a complete 6,250-byte rotational track.
+
+The same process is applied to all 35 tracks.
+
+Media ownership is now explicit as well. An empty drive has no track storage.
+Inserting a disk allocates and builds the nibblized tracks; ejecting it releases
+them and returns the drive to an empty state.
+
+The satisfying test was connecting this new media path to the rotational model
+from the previous step.
+
+With a real DOS 3.3 image inserted, drive 1 selected, the head on track 0 and
+the motor switched on through `$C0E9`, CPU-cycle-driven rotation moved through
+the initial synchronization bytes.
+
+Then the controller latch saw:
+
+```text
+position 48 -> $D5
+position 49 -> $AA
+position 50 -> $96
+```
+
+The address-field prologue had reached the controller.
+
+This time those bytes were not placed manually into a synthetic test track.
+They came from a real `.dsk` image, passed through sector ordering and
+nibblization, were mounted in the drive, rotated under the head according to
+elapsed CPU cycles, and finally reached the data latch.
+
+The path is now:
+
+```text
+DOS 3.3 .dsk
+    -> sectors
+    -> nibblized tracks
+    -> inserted media
+    -> Disk II rotation
+    -> read head
+    -> controller data latch
+    -> Apple II bus
+```
+
+The drive finally has a disk.
+
+The next question is whether DOS agrees. :)
+
+## October 2026 — From a spinning drive to real disk media
+
+During the first week of October, the Disk II model crossed an important
+boundary: it stopped operating only on synthetic track data and gained real
+disk media.
+
+CPU instruction timing now drives independent rotational state for both drives,
+while the selected drive feeds the controller through a data latch. A standard
+143,360-byte DOS 3.3 `.dsk` image can now be loaded and converted into 35
+nibblized tracks, including DOS 3.3 sector ordering, 4-and-4 address encoding,
+6-and-2 data encoding, checksums, address and data fields, and synchronization
+gaps.
+
+Disk media also has an explicit lifecycle: inserting an image allocates and
+builds its track representation, while ejecting it releases that media again.
+
+The complete path now reaches from a real disk image to the Apple II hardware
+model:
+
+```text
+DOS 3.3 .dsk
+    -> sector data
+    -> nibblized tracks
+    -> rotating media
+    -> read head
+    -> controller data latch
+    -> Apple II bus
+```
+
+The first end-to-end test rotated a real nibblized DOS 3.3 track until the
+controller received `$D5 $AA $96`, the address-field prologue.
+
+The next step is the most interesting one yet: let the original Apple II boot
+code try to read the disk.
 
 ## Longer-term goals
 
@@ -928,8 +1061,9 @@ peripheral timing.
 
 Disk II emulation now includes two independent drives, stepper-driven
 quarter-track head movement, CPU-cycle-driven rotation, track-byte positioning
-and a controller data latch. Synthetic bytes can reach the Apple II bus; real
-`.dsk` image loading and nibblization come next.
+and a controller data latch. Real DOS 3.3 `.dsk` images can now be loaded,
+nibblized into 35 encoded tracks, inserted into a drive, rotated and read
+through the controller data path.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 
@@ -956,4 +1090,6 @@ But it boots.
 
 It runs BASIC.
 
-And now BASIC can draw in Hi-Res color. :)
+BASIC can draw in Hi-Res color.
+
+And now the Disk II has a real disk spinning under its head. :)

@@ -963,6 +963,21 @@ beyond the initial boot code.
 
 Then it failed.
 
+There was another small surprise hidden in all of this.
+
+I thought I was trying to boot DOS 3.3.
+
+The file had a `.dsk` extension and I had downloaded it as a DOS 3.3 disk,
+so that was the assumption behind the first tests.
+
+But as the boot progressed, the sector layout started telling a different
+story.
+
+The image was using ProDOS sector ordering.
+
+So, somewhat accidentally, my first real operating-system boot target had
+changed from DOS 3.3 to ProDOS.
+
 What followed was several days of tracing increasingly deep layers of the
 machine.
 

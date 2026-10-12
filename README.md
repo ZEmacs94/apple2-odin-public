@@ -32,8 +32,20 @@ understand the machine while building it.
 
 ## Current status
 
-The emulator can now boot a real Apple II ROM and run Applesoft BASIC
-interactively in an SDL3 window.
+The emulator can now boot both the original Apple II ROM and a real ProDOS
+system from a `.dsk` disk image.
+
+ProDOS BASIC 1.8 reaches its command prompt through the emulated Disk II
+controller, and filesystem access is operational: `CATALOG` successfully reads
+and displays the directory of the mounted disk.
+
+![ProDOS CATALOG running from the emulated Disk II](screenshots/prodos-catalog.png)
+
+*ProDOS BASIC 1.8 reading the directory of a real `.dsk` image through the
+emulated Disk II controller.*
+
+The original Apple II ROM also continues to run Applesoft BASIC interactively
+in an SDL3 window.
 
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-basic.png)
 
@@ -86,16 +98,14 @@ independent from display scaling.
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
 
 The Disk II model now includes two independent drives, motor control, drive
-selection, Q6/Q7, and physical head movement in quarter-track units. Rotation is
-driven by elapsed 6502 cycles, each drive maintains its own rotational position,
-and the selected drive feeds a controller data latch as bytes pass under the
-head. Real DOS 3.3 `.dsk` images can now be loaded, converted into nibblized
-6-and-2 tracks, inserted into a drive and rotated under the emulated read head.
-Bytes originating in a real disk image can now reach the Apple II bus through
-the controller data latch.
+selection, Q6/Q7, physical head movement in quarter-track units, CPU-cycle-driven
+rotation and a controller data latch. Real `.dsk` images can be loaded and
+nibblized into Disk II tracks.
 
-The NMOS 6502 core currently implements **all 151 official opcode
-variants**.
+That path is now complete enough to boot ProDOS BASIC 1.8 and read the mounted
+filesystem through the emulated Disk II controller.
+
+The NMOS 6502 core currently implements **all 151 official opcode variants**.
 
 ## What is already working
 
@@ -149,6 +159,11 @@ variants**.
 - Nibblization of all 35 tracks from a real disk image
 - Disk insertion and ejection with media-owned track storage
 - Real nibblized disk bytes reaching the controller data latch through CPU-cycle-driven rotation
+- ProDOS sector ordering
+- Language Card RAM and bank switching
+- ProDOS boot through the emulated Disk II controller
+- ProDOS BASIC 1.8
+- ProDOS filesystem access (`CATALOG` verified)
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -252,23 +267,22 @@ can be controlled through the original Apple II soft switches at `$C054` and
 
 ## Where it goes next
 
-With **all 151 official NMOS 6502 opcode variants now implemented**, CPU work
-has moved beyond instruction coverage into timing and hardware interaction.
+With **all 151 official NMOS 6502 opcode variants implemented** and ProDOS now
+booting successfully through the emulated Disk II controller, the project has
+moved beyond the first complete disk-boot milestone.
 
-Instructions now report elapsed cycles, including the dynamic timing needed by
-branches and indexed page crossings. That timing is already being consumed by
-the Disk II model to drive disk rotation.
+The next major hardware and compatibility steps include:
 
-The next major hardware steps are:
-
-- booting DOS 3.3 through the emulated controller
-- refining Disk II controller behavior as real boot code exposes missing details
+- improving Disk II head-position and read behavior
+- further Disk II controller accuracy
+- validating DOS 3.3 boot and compatibility
 - further CPU timing and ~1 MHz synchronization work
 - speaker
 - joystick / paddles
+- broader real-software compatibility testing
 
-The exact order may change as real software starts exposing missing pieces of
-the machine.
+The exact order may change as real software continues to expose missing pieces
+of the machine.
 
 ## The next big milestone
 
@@ -936,40 +950,150 @@ The drive finally has a disk.
 
 The next question is whether DOS agrees. :)
 
-## October 2026 — From a spinning drive to real disk media
+### October 12, 2026 — The Disk II finally boots something
 
-During the first week of October, the Disk II model crossed an important
-boundary: it stopped operating only on synthetic track data and gained real
-disk media.
+Getting bytes from a disk image to the controller was one thing.
 
-CPU instruction timing now drives independent rotational state for both drives,
-while the selected drive feeds the controller through a data latch. A standard
-143,360-byte DOS 3.3 `.dsk` image can now be loaded and converted into 35
-nibblized tracks, including DOS 3.3 sector ordering, 4-and-4 address encoding,
-6-and-2 data encoding, checksums, address and data fields, and synchronization
-gaps.
+Getting an operating system to believe it was talking to a real Disk II
+turned out to be something else entirely.
+
+The first attempt looked promising. The Apple II boot ROM found the controller,
+the disk started spinning, sectors were being read, and execution moved well
+beyond the initial boot code.
+
+Then it failed.
+
+What followed was several days of tracing increasingly deep layers of the
+machine.
+
+At various points, the investigation went through:
+
+- the Disk II boot ROM
+- 6-and-2 encoding
+- sector ordering
+- the 6502 stack and JSR/RTS behavior
+- CPU instruction timing
+- the Disk II data latch
+- the Language Card
+- ProDOS memory probing and relocation
+- code executing from bank-switched RAM
+- and finally the Disk II controller test itself
+
+Several things that looked suspicious turned out to be perfectly correct.
+
+One particularly memorable example was an apparent jump into `$0080`.
+For a moment it looked like CPU execution had gone completely wrong.
+
+It had not.
+
+The original code really was doing that.
+
+Eventually ProDOS got far enough to print:
+
+```text
+RELOCATION / CONFIGURATION ERROR
+```
+
+That was actually good news.
+
+It meant a surprising amount of the machine was already working.
+
+The trace eventually reached a small loop repeatedly reading the Disk II
+controller at `$C0EC`. The disk was rotating and the controller was being
+accessed, but ProDOS never observed the change it expected.
+
+The reason turned out to be a tiny assumption in my own model.
+
+I represent Disk II head position in quarter-track units. Until now, the read
+path only returned disk data when the head was positioned exactly on a whole
+track:
+
+```text
+head_position % 4 == 0
+```
+
+During the ProDOS controller test, the emulated stepper had left the head at
+position 29.
+
+Track 7 is position 28.
+
+So the head was only one quarter-track away, the disk was spinning normally,
+but my emulator simply declared that position unreadable.
+
+Every read therefore looked the same to ProDOS.
+
+Removing that restriction was enough to change the result dramatically.
+
+The next boot produced:
+
+```text
+PRODOS BASIC 1.8
+COPYRIGHT APPLE 1983-92
+]
+```
+
+And then came the test I really wanted to see:
+
+```text
+]CATALOG
+```
+
+The directory appeared.
+
+![ProDOS CATALOG running from the emulated Disk II](screenshots/prodos-catalog.png)
+
+*ProDOS BASIC 1.8 reading the directory of a real `.dsk` image through the
+emulated Disk II controller.*
+
+That was probably the most satisfying moment of the Disk II work so far.
+
+The first version of the drive had grown from a few soft switches into
+stepper phases, quarter-track positioning, rotational timing, two independent
+drives, a controller latch, real `.dsk` images, sector ordering, 6-and-2
+nibblization, a Language Card, and finally enough controller behavior for
+ProDOS to boot and read its filesystem.
+
+The quarter-track behavior is still an approximation and will need refinement.
+
+But for the first time, a real operating system has successfully booted from
+my emulated Disk II.
+
+The drive finally has a disk.
+
+And now the Apple II can actually use it. :)
+
+## October 2026 — From a spinning drive to a bootable disk
+
+During the first half of October, the Disk II model crossed an important
+boundary: it stopped operating only on synthetic track data, gained real disk
+media, and became complete enough to boot ProDOS.
+
+CPU instruction timing drives independent rotational state for both drives,
+while the selected drive feeds the controller through a data latch. Real
+`.dsk` images can be converted into nibblized tracks with address fields,
+6-and-2 data encoding, checksums and synchronization gaps.
 
 Disk media also has an explicit lifecycle: inserting an image allocates and
 builds its track representation, while ejecting it releases that media again.
 
-The complete path now reaches from a real disk image to the Apple II hardware
-model:
+The complete path now reaches from a real disk image to a running operating
+system:
 
 ```text
-DOS 3.3 .dsk
+.dsk image
     -> sector data
     -> nibblized tracks
     -> rotating media
     -> read head
     -> controller data latch
     -> Apple II bus
+    -> 6502
+    -> ProDOS
+    -> filesystem
 ```
 
-The first end-to-end test rotated a real nibblized DOS 3.3 track until the
-controller received `$D5 $AA $96`, the address-field prologue.
-
-The next step is the most interesting one yet: let the original Apple II boot
-code try to read the disk.
+ProDOS BASIC 1.8 now boots successfully, and `CATALOG` reads and displays the
+directory of the mounted disk.
 
 ## Longer-term goals
 
@@ -1061,9 +1185,11 @@ peripheral timing.
 
 Disk II emulation now includes two independent drives, stepper-driven
 quarter-track head movement, CPU-cycle-driven rotation, track-byte positioning
-and a controller data latch. Real DOS 3.3 `.dsk` images can now be loaded,
-nibblized into 35 encoded tracks, inserted into a drive, rotated and read
-through the controller data path.
+and a controller data latch. Real `.dsk` images can be loaded, nibblized into
+encoded tracks, inserted into a drive and read through the controller data path.
+
+That path is now complete enough to boot ProDOS BASIC 1.8 and access the
+mounted filesystem, with `CATALOG` successfully displaying the disk directory.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 
@@ -1092,4 +1218,4 @@ It runs BASIC.
 
 BASIC can draw in Hi-Res color.
 
-And now the Disk II has a real disk spinning under its head. :)
+And now it boots ProDOS from an emulated Disk II and reads a real filesystem. :)

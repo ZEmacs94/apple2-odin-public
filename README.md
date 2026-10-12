@@ -100,10 +100,11 @@ independent from display scaling.
 The Disk II model now includes two independent drives, motor control, drive
 selection, Q6/Q7, physical head movement in quarter-track units, CPU-cycle-driven
 rotation and a controller data latch. Real `.dsk` images can be loaded and
-nibblized into Disk II tracks.
+nibblized into Disk II tracks using either DOS 3.3 or ProDOS sector ordering.
 
-That path is now complete enough to boot ProDOS BASIC 1.8 and read the mounted
-filesystem through the emulated Disk II controller.
+That path is now complete enough to boot both ProDOS BASIC 1.8 and DOS 3.3 from
+real disk images. `CATALOG` works under both operating systems, and DOS 3.3 can
+load and execute `LITTLE BRICK OUT` from the System Master disk.
 
 The NMOS 6502 core currently implements **all 151 official opcode variants**.
 
@@ -164,6 +165,9 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - ProDOS boot through the emulated Disk II controller
 - ProDOS BASIC 1.8
 - ProDOS filesystem access (`CATALOG` verified)
+- DOS 3.3 System Master boot through the emulated Disk II controller
+- DOS 3.3 filesystem access (`CATALOG` verified)
+- DOS 3.3 program loading and execution (`LITTLE BRICK OUT` verified)
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -267,15 +271,15 @@ can be controlled through the original Apple II soft switches at `$C054` and
 
 ## Where it goes next
 
-With **all 151 official NMOS 6502 opcode variants implemented** and ProDOS now
-booting successfully through the emulated Disk II controller, the project has
-moved beyond the first complete disk-boot milestone.
+With **all 151 official NMOS 6502 opcode variants implemented**, and both
+ProDOS and DOS 3.3 now booting successfully through the emulated Disk II
+controller, the project has moved beyond the first disk-boot milestones.
 
 The next major hardware and compatibility steps include:
 
 - improving Disk II head-position and read behavior
 - further Disk II controller accuracy
-- validating DOS 3.3 boot and compatibility
+- broader DOS 3.3 and ProDOS compatibility testing
 - further CPU timing and ~1 MHz synchronization work
 - speaker
 - joystick / paddles
@@ -286,13 +290,15 @@ of the machine.
 
 ## The next big milestone
 
-One of the first major goals is to boot **DOS 3.3** and run a real Apple II
-assembler such as **Merlin**.
+DOS 3.3 now boots successfully from the original System Master image.
+
+The next major software milestone is to run a real Apple II assembler such as
+**Merlin**.
 
 The moment I can:
 
 ```text
-Boot DOS 3.3
+Boot DOS 3.3          ✓
       │
       ▼
 Run Merlin
@@ -963,21 +969,6 @@ beyond the initial boot code.
 
 Then it failed.
 
-There was another small surprise hidden in all of this.
-
-I thought I was trying to boot DOS 3.3.
-
-The file had a `.dsk` extension and I had downloaded it as a DOS 3.3 disk,
-so that was the assumption behind the first tests.
-
-But as the boot progressed, the sector layout started telling a different
-story.
-
-The image was using ProDOS sector ordering.
-
-So, somewhat accidentally, my first real operating-system boot target had
-changed from DOS 3.3 to ProDOS.
-
 What followed was several days of tracing increasingly deep layers of the
 machine.
 
@@ -1076,6 +1067,41 @@ my emulated Disk II.
 The drive finally has a disk.
 
 And now the Apple II can actually use it. :)
+
+### October 12, 2026 — DOS 3.3 boots, and a real program follows
+
+Later the same day, the second major disk operating system joined ProDOS.
+
+A real DOS 3.3 System Master image booted through the same emulated Disk II
+controller. The important difference was not in the drive or controller, but
+in the sector ordering used when interpreting the raw `.dsk` image.
+
+After booting, DOS 3.3 successfully displayed the disk directory with:
+
+```text
+CATALOG
+```
+
+The next test went one step further:
+
+```text
+RUN LITTLE BRICK OUT
+```
+
+DOS loaded the 1979 Apple program from the System Master disk and started it
+successfully.
+
+![Little Brick Out running from DOS 3.3](screenshots/little-brick-out.png)
+
+This is the first real Apple II program loaded from a DOS 3.3 disk image and
+executed through the emulator's Disk II path.
+
+The game reaches its game screen and renders its Hi-Res graphics correctly. It
+also immediately exposes the next missing piece of hardware: `LITTLE BRICK OUT`
+expects an Apple II paddle, which is not emulated yet.
+
+That is exactly the kind of compatibility test this project is meant to use:
+real software gets far enough to tell the emulator what hardware it needs next.
 
 ## October 2026 — From a spinning drive to a bootable disk
 
@@ -1203,8 +1229,9 @@ quarter-track head movement, CPU-cycle-driven rotation, track-byte positioning
 and a controller data latch. Real `.dsk` images can be loaded, nibblized into
 encoded tracks, inserted into a drive and read through the controller data path.
 
-That path is now complete enough to boot ProDOS BASIC 1.8 and access the
-mounted filesystem, with `CATALOG` successfully displaying the disk directory.
+That path is now complete enough to boot both ProDOS BASIC 1.8 and DOS 3.3
+from real disk images. `CATALOG` works under both operating systems, and DOS 3.3
+can load and execute `LITTLE BRICK OUT` from the System Master disk.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 
@@ -1233,4 +1260,5 @@ It runs BASIC.
 
 BASIC can draw in Hi-Res color.
 
-And now it boots ProDOS from an emulated Disk II and reads a real filesystem. :)
+And now it boots both ProDOS and DOS 3.3 from an emulated Disk II, reads their
+filesystems, and loads real Apple II software from disk. :)

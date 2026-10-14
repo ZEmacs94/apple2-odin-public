@@ -104,7 +104,9 @@ nibblized into Disk II tracks using either DOS 3.3 or ProDOS sector ordering.
 
 That path is now complete enough to boot both ProDOS BASIC 1.8 and DOS 3.3 from
 real disk images. `CATALOG` works under both operating systems, and DOS 3.3 can
-load and execute `LITTLE BRICK OUT` from the System Master disk.
+load and execute `LITTLE BRICK OUT` from the System Master disk. Paddle button
+and analog paddle timing are now emulated as well, making the game actually
+playable.
 
 The NMOS 6502 core currently implements **all 151 official opcode variants**.
 
@@ -168,6 +170,11 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - DOS 3.3 System Master boot through the emulated Disk II controller
 - DOS 3.3 filesystem access (`CATALOG` verified)
 - DOS 3.3 program loading and execution (`LITTLE BRICK OUT` verified)
+- Apple II paddle button 0 (`$C061`)
+- Paddle timer trigger (`$C070`) and paddle 0 timer input (`$C064`)
+- CPU-cycle-based paddle timing
+- Continuous SDL3 keyboard control of paddle 0
+- `LITTLE BRICK OUT` playable from the DOS 3.3 System Master disk
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -280,9 +287,10 @@ The next major hardware and compatibility steps include:
 - improving Disk II head-position and read behavior
 - further Disk II controller accuracy
 - broader DOS 3.3 and ProDOS compatibility testing
-- further CPU timing and ~1 MHz synchronization work
+- further CPU timing accuracy work
 - speaker
-- joystick / paddles
+- additional paddle inputs and buttons
+- joystick support
 - broader real-software compatibility testing
 
 The exact order may change as real software continues to expose missing pieces
@@ -1097,11 +1105,39 @@ This is the first real Apple II program loaded from a DOS 3.3 disk image and
 executed through the emulator's Disk II path.
 
 The game reaches its game screen and renders its Hi-Res graphics correctly. It
-also immediately exposes the next missing piece of hardware: `LITTLE BRICK OUT`
-expects an Apple II paddle, which is not emulated yet.
+also immediately exposed the next missing piece of hardware: `LITTLE BRICK OUT`
+expects an Apple II paddle.
 
 That is exactly the kind of compatibility test this project is meant to use:
 real software gets far enough to tell the emulator what hardware it needs next.
+
+### October 14, 2026 — Little Brick Out becomes playable
+
+First, "Happy birthday, mom!"
+
+Reaching the game screen was not quite the same as being able to play the game.
+
+`LITTLE BRICK OUT` expects the original Apple II paddle interface. Button 0 is
+now exposed through `$C061`, while `$C070` starts the paddle timing interval and
+`$C064` reports the paddle timer state.
+
+The paddle is not exposed to Apple II software as a direct position value.
+Instead, software measures how long the timer remains active after `$C070` is
+accessed. The emulator now models that delay from elapsed 6502 cycles, with the
+paddle position determining the timeout.
+
+The SDL3 frontend keeps host controls separate from that hardware behavior.
+Keyboard input continuously changes the paddle position, while the emulated
+Apple II sees only the paddle button and timer interface.
+
+CPU execution is also regulated against real elapsed host time at approximately
+1.023 MHz, keeping the paddle timing and Disk II rotation tied to the same
+emulated CPU clock.
+
+With those pieces in place, the 1979 game loaded from the DOS 3.3 System Master
+disk is no longer just running.
+
+**It is playable.**
 
 ## October 2026 — From a spinning drive to a bootable disk
 
@@ -1134,7 +1170,8 @@ system:
 ```
 
 ProDOS BASIC 1.8 now boots successfully, and `CATALOG` reads and displays the
-directory of the mounted disk.
+directory of the mounted disk. DOS 3.3 also boots and can load real software;
+with paddle support now implemented, `LITTLE BRICK OUT` is playable.
 
 ## Longer-term goals
 
@@ -1222,7 +1259,8 @@ All 151 official NMOS 6502 opcode variants are implemented.
 
 The CPU is not fully cycle accurate yet, and some NMOS 6502 edge cases still
 need to be verified, but instruction execution now reports elapsed cycles for
-peripheral timing.
+peripheral timing. The frontend also regulates execution against real elapsed
+host time at approximately 1.023 MHz.
 
 Disk II emulation now includes two independent drives, stepper-driven
 quarter-track head movement, CPU-cycle-driven rotation, track-byte positioning
@@ -1231,7 +1269,8 @@ encoded tracks, inserted into a drive and read through the controller data path.
 
 That path is now complete enough to boot both ProDOS BASIC 1.8 and DOS 3.3
 from real disk images. `CATALOG` works under both operating systems, and DOS 3.3
-can load and execute `LITTLE BRICK OUT` from the System Master disk.
+can load and execute `LITTLE BRICK OUT` from the System Master disk. With paddle
+support implemented, the game is now playable.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 
@@ -1261,4 +1300,5 @@ It runs BASIC.
 BASIC can draw in Hi-Res color.
 
 And now it boots both ProDOS and DOS 3.3 from an emulated Disk II, reads their
-filesystems, and loads real Apple II software from disk. :)
+filesystems, loads real Apple II software from disk, and plays `LITTLE BRICK OUT`
+through an emulated Apple II paddle. :)

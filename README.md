@@ -108,6 +108,18 @@ load and execute `LITTLE BRICK OUT` from the System Master disk. Paddle button
 and analog paddle timing are now emulated as well, making the game actually
 playable.
 
+The same input model has now grown into a complete two-axis Apple II joystick:
+button 0 is exposed at `$C061`, button 1 at `$C062`, and the two analog axes are
+read through `$C064` and `$C065` after the shared `$C070` timer trigger. That was
+enough to make **Choplifter playable**, without any game-specific compatibility
+hack.
+
+![Choplifter playable in apple2-odin](docs/screenshots/choplifter.png)
+
+*Choplifter running and controllable in apple2-odin on October 15, 2026. The
+Hi-Res artifact-color renderer is still visibly approximate, which makes this a
+useful snapshot of the emulator at this stage of development.*
+
 The NMOS 6502 core currently implements **all 151 official opcode variants**.
 
 ## What is already working
@@ -170,11 +182,12 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - DOS 3.3 System Master boot through the emulated Disk II controller
 - DOS 3.3 filesystem access (`CATALOG` verified)
 - DOS 3.3 program loading and execution (`LITTLE BRICK OUT` verified)
-- Apple II paddle button 0 (`$C061`)
-- Paddle timer trigger (`$C070`) and paddle 0 timer input (`$C064`)
-- CPU-cycle-based paddle timing
-- Continuous SDL3 keyboard control of paddle 0
+- Apple II paddle / joystick button 0 (`$C061`) and button 1 (`$C062`)
+- Paddle timer trigger (`$C070`) and two analog timer inputs (`$C064`, `$C065`)
+- CPU-cycle-based paddle and joystick timing
+- Continuous SDL3 keyboard control of both analog axes
 - `LITTLE BRICK OUT` playable from the DOS 3.3 System Master disk
+- `Choplifter` booting from disk, running its demo and playable with two-axis joystick control, firing and helicopter rotation
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -289,9 +302,9 @@ The next major hardware and compatibility steps include:
 - broader DOS 3.3 and ProDOS compatibility testing
 - further CPU timing accuracy work
 - speaker
-- additional paddle inputs and buttons
-- joystick support
+- further joystick / paddle frontend refinement
 - broader real-software compatibility testing
+- continued Hi-Res artifact-color accuracy work
 
 The exact order may change as real software continues to expose missing pieces
 of the machine.
@@ -300,28 +313,26 @@ of the machine.
 
 DOS 3.3 now boots successfully from the original System Master image.
 
-The next major software milestone is to run a real Apple II assembler such as
-**Merlin**.
-
-The moment I can:
+The next major software milestone remains **Merlin**, the classic Apple II
+assembler. An original DOS 3.3 Merlin now boots, its editor works, and 6502
+source can be entered inside apple2-odin. The remaining milestone is to make the
+assembly path fully compatible and then execute the generated program.
 
 ```text
 Boot DOS 3.3          ✓
       │
       ▼
-Run Merlin
+Run Merlin            ✓
       │
       ▼
-Write 6502 code
+Write 6502 code       ✓
       │
       ▼
-Assemble it
+Assemble it           ← current compatibility test
       │
       ▼
 Run it on the emulated Apple II
 ```
-
-will be an important milestone.
 
 At that point, the emulator will no longer just run software.
 
@@ -329,16 +340,18 @@ It will be able to run the tools used to **create Apple II software**.
 
 ## Compatibility targets
 
-The first major game compatibility target is:
+The first major game compatibility target was:
 
-### Choplifter
+### Choplifter — playable ✓
 
-The objective is not merely to reach the title screen.
+The original objective was not merely to reach the title screen, but to make
+the game **playable**. On October 15, that milestone arrived much earlier than
+expected. Choplifter booted and ran its complete demo before any game-specific
+work was attempted. Completing the standard two-axis Apple II joystick interface
+was enough to make the helicopter controllable, including firing and rotation.
 
-The objective is to make it **playable**.
-
-After that, some of the programs and games I would particularly like to use
-as compatibility targets include:
+The next programs and games I would particularly like to use as compatibility
+targets include:
 
 - DROL
 - Spare Change
@@ -1113,8 +1126,6 @@ real software gets far enough to tell the emulator what hardware it needs next.
 
 ### October 14, 2026 — Little Brick Out becomes playable
 
-First, "Happy birthday, mom!"
-
 Reaching the game screen was not quite the same as being able to play the game.
 
 `LITTLE BRICK OUT` expects the original Apple II paddle interface. Button 0 is
@@ -1138,6 +1149,46 @@ With those pieces in place, the 1979 game loaded from the DOS 3.3 System Master
 disk is no longer just running.
 
 **It is playable.**
+
+### October 15, 2026 — Choplifter was supposed to be the next milestone
+
+It was almost 1 a.m. I was already in bed with the laptop. Merlin had become the
+current compatibility investigation, and Choplifter was still sitting further
+down the roadmap as the next major game target.
+
+Before stopping for the night, I decided to boot it just to see how far the
+emulator would get.
+
+I expected a failure.
+
+Instead, the disk booted. The game appeared. Then the complete demo started
+running — animations, helicopter, vehicles and characters — and it just kept
+going.
+
+That was unexpected enough. The next morning made it better.
+
+The existing paddle implementation from Little Brick Out already provided one
+analog axis and one button. Choplifter exposed the rest of the standard Apple II
+joystick interface: a second analog axis and a second button. Adding `$C065` and
+`$C062`, sharing the `$C070` timer trigger across both axes, and mapping the
+controls in the SDL3 frontend was enough to complete the controls.
+
+No Choplifter-specific emulation code was required.
+
+The helicopter could move, climb and descend, fire, and rotate.
+
+**Choplifter was playable.**
+
+![Choplifter playable in apple2-odin](screenshots/choplifter.png)
+
+The screenshot is deliberately worth keeping as-is. The Hi-Res artifact-color
+implementation is still visibly imperfect, so it captures both sides of the
+project at exactly that moment: compatibility had advanced far enough to run a
+substantial real game, while video fidelity still had plenty of room to improve.
+
+Choplifter was supposed to tell me what large subsystem I needed to build next.
+
+Instead, it showed me that much of that work had already been done.
 
 ## October 2026 — From a spinning drive to a bootable disk
 
@@ -1270,7 +1321,9 @@ encoded tracks, inserted into a drive and read through the controller data path.
 That path is now complete enough to boot both ProDOS BASIC 1.8 and DOS 3.3
 from real disk images. `CATALOG` works under both operating systems, and DOS 3.3
 can load and execute `LITTLE BRICK OUT` from the System Master disk. With paddle
-support implemented, the game is now playable.
+support implemented, the game is now playable. The same hardware model now
+includes both joystick axes and two buttons, and Choplifter is playable without
+game-specific emulation code.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 
@@ -1300,5 +1353,6 @@ It runs BASIC.
 BASIC can draw in Hi-Res color.
 
 And now it boots both ProDOS and DOS 3.3 from an emulated Disk II, reads their
-filesystems, loads real Apple II software from disk, and plays `LITTLE BRICK OUT`
-through an emulated Apple II paddle. :)
+filesystems, loads real Apple II software from disk, plays `LITTLE BRICK OUT`,
+runs Merlin's editor, and plays Choplifter through an emulated two-axis Apple II
+joystick. :)

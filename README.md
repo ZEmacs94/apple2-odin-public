@@ -98,15 +98,25 @@ independent from display scaling.
 ![Applesoft BASIC running interactively in apple2-odin](screenshots/applesoft-hgr-cross.png)
 
 The Disk II model now includes two independent drives, motor control, drive
-selection, Q6/Q7, physical head movement in quarter-track units, CPU-cycle-driven
-rotation and a controller data latch. Real `.dsk` images can be loaded and
-nibblized into Disk II tracks using either DOS 3.3 or ProDOS sector ordering.
+selection, Q6/Q7, physical head movement in quarter-track units and CPU-cycle-driven
+300 RPM rotation. Real `.dsk` images can be loaded and nibblized into Disk II
+tracks using either DOS 3.3 or ProDOS sector ordering.
 
-That path is now complete enough to boot both ProDOS BASIC 1.8 and DOS 3.3 from
-real disk images. `CATALOG` works under both operating systems, and DOS 3.3 can
-load and execute `LITTLE BRICK OUT` from the System Master disk. Paddle button
-and analog paddle timing are now emulated as well, making the game actually
-playable.
+Disk reads now pass through an emulation of the Disk II controller's original
+P6 (341-0028) logic state sequencer rather than exposing complete encoded bytes
+through the earlier simplified data-latch model. The sequencer runs at
+approximately 2 MHz and receives flux transitions derived from the rotating
+nibblized track.
+
+The motor model also reproduces the Disk II spin-down delay: switching the motor
+off does not stop the disk immediately. The disk continues rotating for roughly
+another second while the controller remains active.
+
+Both ProDOS BASIC 1.8 and DOS 3.3 boot through this path and `CATALOG` works
+under both operating systems. Real software including Little Brick Out,
+Choplifter and Star Blazer runs through the same controller path. As a practical
+timing check, Star Blazer now reaches its first loading screen in approximately
+four seconds, essentially matching Virtual ][ on the same disk image.
 
 The same input model has now grown into a complete two-axis Apple II joystick:
 button 0 is exposed at `$C061`, button 1 at `$C062`, and the two analog axes are
@@ -163,7 +173,12 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - Independent rotational state for both Disk II drives
 - CPU-cycle-driven Disk II rotation
 - Disk II track-byte positioning and wraparound
-- Disk II controller data latch fed by the selected rotating drive
+- Original Disk II P6 (341-0028) logic state sequencer ROM
+- P6 ROM address-line permutation
+- Disk II logic state sequencer running at approximately 2 MHz
+- Bit-level disk stream and magnetic flux transitions derived from nibblized tracks
+- P6-controlled Disk II data register
+- Realistic Disk II motor spin-down delay
 - DOS 3.3 `.dsk` image loading
 - 35-track / 16-sector / 256-byte sector image representation
 - DOS 3.3 sector ordering
@@ -173,7 +188,7 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - 6,250-byte nibblized track generation
 - Nibblization of all 35 tracks from a real disk image
 - Disk insertion and ejection with media-owned track storage
-- Real nibblized disk bytes reaching the controller data latch through CPU-cycle-driven rotation
+- Real nibblized disk data reaching the P6 sequencer as CPU-cycle-driven flux transitions
 - ProDOS sector ordering
 - Language Card RAM and bank switching
 - ProDOS boot through the emulated Disk II controller
@@ -297,8 +312,8 @@ controller, the project has moved beyond the first disk-boot milestones.
 
 The next major hardware and compatibility steps include:
 
-- improving Disk II head-position and read behavior
-- further Disk II controller accuracy
+- improving Disk II quarter-track / intermediate head-position behavior
+- Disk II write support
 - broader DOS 3.3 and ProDOS compatibility testing
 - further CPU timing accuracy work
 - speaker
@@ -1190,39 +1205,113 @@ Choplifter was supposed to tell me what large subsystem I needed to build next.
 
 Instead, it showed me that much of that work had already been done.
 
+### October 19, 2026 — The Disk II was spinning at the right speed
+
+This one hurt.
+
+After the first Disk II model had become good enough to boot ProDOS and DOS 3.3,
+load real programs and run games, one problem remained impossible to ignore:
+disk loading was far too slow.
+
+Star Blazer made it measurable. The same early load that took about four seconds
+in Virtual ][ took roughly 35 seconds in apple2-odin.
+
+That started a much longer investigation than expected.
+
+The obvious suspect was rotational timing. Then the controller latch. Then CPU
+timing. Then polling behavior. Then the stepper. Then the way the disk stream
+was presented to the controller.
+
+Measurements, traces and several discarded hypotheses followed. At one point
+the emulator was spending so much time investigating a 1978 floppy controller
+that simply waiting for another boot had become part of the debugging problem.
+
+The simplified byte-latch model had reached its limit, so the read path was
+rebuilt around the Disk II controller's original P6 (341-0028) logic state
+sequencer.
+
+The path became:
+
+```text
+.dsk image
+    -> nibblized track
+    -> rotating bit stream
+    -> magnetic flux transitions
+    -> P6 logic state sequencer
+    -> controller data register
+    -> Apple II bus
+    -> 6502
+```
+
+Getting there was not a straight line either. The P6 ROM has its own address-line
+mapping, the sequencer runs at roughly twice the 6502 clock rate, and small
+mistakes were enough to make ProDOS or DOS 3.3 stop booting entirely.
+
+Eventually both operating systems booted again through the new controller.
+
+But the loading was still too slow.
+
+So I measured the physical rotation directly.
+
+It was almost exactly 300 RPM.
+
+The disk had been spinning at the right speed all along.
+
+The real clue was what happened when software switched the motor off. My model
+stopped the disk immediately. A real Disk II does not: the drive keeps spinning
+for roughly another second, and the controller can continue working during that
+time.
+
+Adding that motor spin-down behavior finally changed everything.
+
+Star Blazer now reaches its first loading screen in approximately four seconds,
+essentially the same as Virtual ][. The later transition from the text screen
+to the Hi-Res animation also happens at approximately the same time in both
+emulators.
+
+After all the traces, timing measurements, P6 work and false leads, the final
+performance problem was not that the emulated disk was spinning too slowly.
+
+**It was stopping too quickly.**
+
+That is probably the most Disk II bug I could have hoped for.
+
 ## October 2026 — From a spinning drive to a bootable disk
 
-During the first half of October, the Disk II model crossed an important
-boundary: it stopped operating only on synthetic track data, gained real disk
-media, and became complete enough to boot ProDOS.
+During October, the Disk II model crossed several boundaries: it gained real
+disk media, became complete enough to boot ProDOS and DOS 3.3, and then moved
+beyond its original simplified byte-latch read path to an emulation of the
+controller's P6 logic state sequencer.
 
-CPU instruction timing drives independent rotational state for both drives,
-while the selected drive feeds the controller through a data latch. Real
-`.dsk` images can be converted into nibblized tracks with address fields,
-6-and-2 data encoding, checksums and synchronization gaps.
+CPU instruction timing drives the physical 300 RPM rotation. Real `.dsk` images
+are converted into nibblized tracks with address fields, 6-and-2 data encoding,
+checksums and synchronization gaps. The rotating bit stream produces flux
+transitions that feed the P6 state machine, which in turn evolves the controller
+data register seen by Apple II software.
 
-Disk media also has an explicit lifecycle: inserting an image allocates and
-builds its track representation, while ejecting it releases that media again.
-
-The complete path now reaches from a real disk image to a running operating
-system:
+The complete read path is now:
 
 ```text
 .dsk image
     -> sector data
     -> nibblized tracks
     -> rotating media
-    -> read head
-    -> controller data latch
+    -> magnetic flux transitions
+    -> P6 logic state sequencer
+    -> controller data register
     -> Apple II bus
     -> 6502
-    -> ProDOS
-    -> filesystem
+    -> DOS / ProDOS
 ```
 
-ProDOS BASIC 1.8 now boots successfully, and `CATALOG` reads and displays the
-directory of the mounted disk. DOS 3.3 also boots and can load real software;
-with paddle support now implemented, `LITTLE BRICK OUT` is playable.
+The motor also keeps spinning briefly after the motor-off soft switch, reproducing
+an important piece of real Disk II behavior. That detail proved essential to
+loading performance: Star Blazer now loads at essentially the same speed as in
+Virtual ][.
+
+ProDOS BASIC 1.8 and DOS 3.3 boot successfully, `CATALOG` works under both, and
+real disk-loaded software including Little Brick Out, Choplifter and Star Blazer
+runs through the same controller path.
 
 ## Longer-term goals
 
@@ -1314,15 +1403,17 @@ peripheral timing. The frontend also regulates execution against real elapsed
 host time at approximately 1.023 MHz.
 
 Disk II emulation now includes two independent drives, stepper-driven
-quarter-track head movement, CPU-cycle-driven rotation, track-byte positioning
-and a controller data latch. Real `.dsk` images can be loaded, nibblized into
-encoded tracks, inserted into a drive and read through the controller data path.
+quarter-track head movement, CPU-cycle-driven 300 RPM rotation and the original
+P6 (341-0028) logic state sequencer. Real `.dsk` images can be loaded, nibblized
+into encoded tracks and presented to the controller as bit-level flux changes.
+Motor spin-down behavior is modeled as well.
 
-That path is now complete enough to boot both ProDOS BASIC 1.8 and DOS 3.3
-from real disk images. `CATALOG` works under both operating systems, and DOS 3.3
-can load and execute `LITTLE BRICK OUT` from the System Master disk. With paddle
-support implemented, the game is now playable. The same hardware model now
-includes both joystick axes and two buttons, and Choplifter is playable without
+This path now boots both ProDOS BASIC 1.8 and DOS 3.3 from real disk images.
+`CATALOG` works under both operating systems, and real disk-loaded software
+including Little Brick Out, Choplifter and Star Blazer runs through the same
+controller path. Star Blazer's loading timing is now comparable to Virtual ][.
+With paddle support implemented, Little Brick Out is playable, while the same
+input model provides both joystick axes and two buttons for Choplifter without
 game-specific emulation code.
 
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.

@@ -112,6 +112,10 @@ The motor model also reproduces the Disk II spin-down delay: switching the motor
 off does not stop the disk immediately. The disk continues rotating for roughly
 another second while the controller remains active.
 
+The same controller path now supports Disk II writes. Merlin can assemble 6502
+source and save the generated file back to the mounted disk through the emulated
+P6 write path.
+
 Both ProDOS BASIC 1.8 and DOS 3.3 boot through this path and `CATALOG` works
 under both operating systems. Real software including Little Brick Out,
 Choplifter and Star Blazer runs through the same controller path. As a practical
@@ -124,7 +128,7 @@ read through `$C064` and `$C065` after the shared `$C070` timer trigger. That wa
 enough to make **Choplifter playable**, without any game-specific compatibility
 hack.
 
-![Choplifter playable in apple2-odin](docs/screenshots/choplifter.png)
+![Choplifter playable in apple2-odin](screenshots/choplifter.png)
 
 *Choplifter running and controllable in apple2-odin on October 15, 2026. The
 Hi-Res artifact-color renderer is still visibly approximate, which makes this a
@@ -179,6 +183,9 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - Bit-level disk stream and magnetic flux transitions derived from nibblized tracks
 - P6-controlled Disk II data register
 - Realistic Disk II motor spin-down delay
+- Disk II bit-level write support through the P6 controller path
+- Flux-transition capture and projection back onto the rotating track
+- Exact write/track timing relationship (`CYCLES_PER_REVOLUTION = TRACK_BITS * 4`)
 - DOS 3.3 `.dsk` image loading
 - 35-track / 16-sector / 256-byte sector image representation
 - DOS 3.3 sector ordering
@@ -197,6 +204,8 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - DOS 3.3 System Master boot through the emulated Disk II controller
 - DOS 3.3 filesystem access (`CATALOG` verified)
 - DOS 3.3 program loading and execution (`LITTLE BRICK OUT` verified)
+- Merlin editor and 6502 assembly
+- Merlin disk write / save path (`O TEST` verified after assembly)
 - Apple II paddle / joystick button 0 (`$C061`) and button 1 (`$C062`)
 - Paddle timer trigger (`$C070`) and two analog timer inputs (`$C064`, `$C065`)
 - CPU-cycle-based paddle and joystick timing
@@ -313,7 +322,7 @@ controller, the project has moved beyond the first disk-boot milestones.
 The next major hardware and compatibility steps include:
 
 - improving Disk II quarter-track / intermediate head-position behavior
-- Disk II write support
+- broader Disk II write compatibility testing
 - broader DOS 3.3 and ProDOS compatibility testing
 - further CPU timing accuracy work
 - speaker
@@ -328,10 +337,10 @@ of the machine.
 
 DOS 3.3 now boots successfully from the original System Master image.
 
-The next major software milestone remains **Merlin**, the classic Apple II
-assembler. An original DOS 3.3 Merlin now boots, its editor works, and 6502
-source can be entered inside apple2-odin. The remaining milestone is to make the
-assembly path fully compatible and then execute the generated program.
+The **Merlin** milestone has now been crossed. An original DOS 3.3 Merlin boots,
+its editor works, 6502 source can be entered and assembled inside apple2-odin,
+and the resulting file can be saved back to disk through the emulated Disk II
+write path.
 
 ```text
 Boot DOS 3.3          ✓
@@ -343,15 +352,16 @@ Run Merlin            ✓
 Write 6502 code       ✓
       │
       ▼
-Assemble it           ← current compatibility test
+Assemble it           ✓
       │
       ▼
-Run it on the emulated Apple II
+Save it to disk       ✓
 ```
 
-At that point, the emulator will no longer just run software.
+The emulator no longer just runs Apple II software.
 
-It will be able to run the tools used to **create Apple II software**.
+It can now run one of the tools used to **create Apple II software**, including
+writing its output back through the emulated floppy controller.
 
 ## Compatibility targets
 
@@ -853,10 +863,12 @@ accumulator converts elapsed CPU time into movement through the encoded track:
     -> byte passing under the head
 ```
 
-The current model uses approximately 204,600 CPU cycles per 300 RPM revolution
-and 6,250 encoded bytes per track revolution. Fractional progress is preserved
-between instructions, avoiding floating-point timing and cumulative rounding
-loss.
+At this stage, the model used approximately 204,600 CPU cycles per 300 RPM
+revolution and 6,250 encoded bytes per track revolution. Fractional progress
+was preserved between instructions, avoiding floating-point timing and cumulative
+rounding loss. That rotational constant would later be refined when Disk II
+write timing exposed the need for an exact relationship between track cells and
+CPU cycles.
 
 Both drives have independent mechanical state. They can therefore rotate at the
 same time, regardless of which one is selected. Drive selection determines
@@ -1276,6 +1288,79 @@ performance problem was not that the emulated disk was spinning too slowly.
 
 That is probably the most Disk II bug I could have hoped for.
 
+### October 25, 2026 — The Disk II learns how to write
+
+Reading a Disk II convincingly was already difficult.
+
+Writing one turned out to be even less forgiving.
+
+Merlin became the test. DOS 3.3 booted, `CATALOG` worked, Merlin loaded, source
+could be entered and assembled correctly — but saving the result with `O TEST`
+ended in an I/O error.
+
+The write path was already operating at the level of the original controller:
+the P6 sequencer produced the write stream, flux transitions were captured over
+time, and those transitions were projected back onto the rotating track.
+
+The remaining bug was small enough to hide inside the timing model.
+
+The track representation contains 50,992 bit cells, while the Disk II write
+stream advances by one bit every four 6502 cycles. Rotation, however, was still
+using the earlier approximation of 204,600 CPU cycles per revolution.
+
+That meant a track cell was not quite four cycles long.
+
+The difference was only about 0.3 percent.
+
+It was enough.
+
+Over a complete sector write, the temporal write stream slowly drifted against
+the spatial track grid. A 2,744-bit encoded sector was being projected into
+roughly 2,736 track cells.
+
+The fix was simply to make the two models describe the same physical timeline:
+
+```odin
+CYCLES_PER_REVOLUTION :: TRACK_BITS * 4
+```
+
+With `TRACK_BITS = 50992`, one revolution is therefore 203,968 CPU cycles.
+
+One track cell is now exactly four CPU cycles, and exactly eight ticks of the
+2 MHz Disk II logic state sequencer.
+
+The next test was:
+
+```text
+BOOT DOS 3.3
+    -> Merlin
+    -> ASM
+    -> O TEST
+```
+
+This time, the file was written successfully.
+
+There was one final apparent mystery. Merlin displayed some opcodes as flashing
+uppercase while editing, and some lowercase mnemonics in an assembled listing
+appeared as punctuation such as `,$!`.
+
+That turned out not to be corruption at all.
+
+The emulator is using the original Apple II+ 341-0036 character generator ROM.
+A stock Apple II+ has no lowercase character set. Merlin therefore uses
+flashing uppercase for lowercase entry where necessary, while high-ASCII
+lowercase values in a listing naturally map onto the 64-glyph Apple II+
+character generator and can appear as punctuation.
+
+What initially looked like the last display bug was actually another piece of
+the original machine behaving exactly like itself.
+
+Disk II read works.
+
+Disk II write works.
+
+And Merlin can now create a file on the emulated disk.
+
 ## October 2026 — From a spinning drive to a bootable disk
 
 During October, the Disk II model crossed several boundaries: it gained real
@@ -1311,7 +1396,8 @@ Virtual ][.
 
 ProDOS BASIC 1.8 and DOS 3.3 boot successfully, `CATALOG` works under both, and
 real disk-loaded software including Little Brick Out, Choplifter and Star Blazer
-runs through the same controller path.
+runs through the same controller path. The controller path now supports writes
+as well, with Merlin successfully saving assembled output back to disk.
 
 ## Longer-term goals
 
@@ -1406,7 +1492,11 @@ Disk II emulation now includes two independent drives, stepper-driven
 quarter-track head movement, CPU-cycle-driven 300 RPM rotation and the original
 P6 (341-0028) logic state sequencer. Real `.dsk` images can be loaded, nibblized
 into encoded tracks and presented to the controller as bit-level flux changes.
-Motor spin-down behavior is modeled as well.
+Motor spin-down behavior is modeled as well. Disk II writes use the same
+controller path, with P6 write activity captured as timed flux transitions and
+projected back onto the track. The rotational model now uses the exact
+relationship `CYCLES_PER_REVOLUTION = TRACK_BITS * 4`, giving 203,968 CPU cycles
+per revolution for the current 50,992-cell track representation.
 
 This path now boots both ProDOS BASIC 1.8 and DOS 3.3 from real disk images.
 `CATALOG` works under both operating systems, and real disk-loaded software
@@ -1445,5 +1535,5 @@ BASIC can draw in Hi-Res color.
 
 And now it boots both ProDOS and DOS 3.3 from an emulated Disk II, reads their
 filesystems, loads real Apple II software from disk, plays `LITTLE BRICK OUT`,
-runs Merlin's editor, and plays Choplifter through an emulated two-axis Apple II
-joystick. :)
+runs Merlin's editor and assembler, writes Merlin output back to disk, and plays
+Choplifter through an emulated two-axis Apple II joystick. :)

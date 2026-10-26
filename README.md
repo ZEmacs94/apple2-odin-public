@@ -134,6 +134,8 @@ hack.
 Hi-Res artifact-color renderer is still visibly approximate, which makes this a
 useful snapshot of the emulator at this stage of development.*
 
+The SDL3 frontend now connects native host gamepads directly to that Apple II joystick model. The left analog stick drives the two paddle axes, the primary buttons map to the Apple II paddle buttons, and SDL3 gamepad hot-plug events allow controllers to be connected or removed while the emulator is running. The existing keyboard-driven paddle controls remain available as a fallback when no physical gamepad is connected. **Choplifter has now been validated with a real gamepad on macOS.**
+
 The NMOS 6502 core currently implements **all 151 official opcode variants**.
 
 Apple IIe auxiliary-memory banking has now started as well. A separate 64 KB
@@ -159,6 +161,9 @@ Apple II sound.**
 - Applesoft BASIC
 - Apple II keyboard soft switches
 - Interactive PC keyboard input
+- Native SDL3 gamepad input mapped to the Apple II joystick / paddle interface
+- Runtime gamepad connect / disconnect support through SDL3 hot-plug events
+- Keyboard paddle / joystick fallback when no physical gamepad is connected
 - 40×24 Apple II text display
 - Original Apple II character generator ROM
 - Normal, inverse and flashing text
@@ -390,6 +395,7 @@ the game **playable**. On October 15, that milestone arrived much earlier than
 expected. Choplifter booted and ran its complete demo before any game-specific
 work was attempted. Completing the standard two-axis Apple II joystick interface
 was enough to make the helicopter controllable, including firing and rotation.
+The same game has now also been validated with a native SDL3 physical gamepad, removing the keyboard-as-paddle layer from compatibility testing.
 
 The second major game compatibility target has now been crossed too:
 
@@ -1568,6 +1574,33 @@ After DROL asked for another 64 KB...
 
 **Spare Change asked for a speaker.**
 
+### October 26, 2026 — A real joystick, finally
+
+The Apple II joystick interface itself was already working, but until now the
+frontend was driving its analog paddle values from the keyboard. That was useful
+for development, but not ideal for compatibility testing: a control problem could
+look like a game or emulator problem when the real limitation was simply the
+keyboard pretending to be an analog joystick.
+
+The SDL3 frontend now accepts a native physical gamepad. The left stick feeds the
+two Apple II paddle axes and the gamepad buttons feed the existing Apple II button
+inputs. Controllers can also be connected and removed while the emulator is
+running through SDL3's gamepad hot-plug events.
+
+There was one small host-side surprise: on macOS the controller was visible to the
+system, but an initial SDL gamepad scan performed too early in startup did not see
+it. Once SDL had begun processing events, the controller appeared normally. The
+final frontend therefore combines initial discovery with runtime add/remove event
+handling.
+
+Choplifter was the first validation.
+
+**Real gamepad -> SDL3 -> Apple II paddles -> Choplifter. ✓**
+
+This is less spectacular than another 64 KB or a suddenly audible speaker, but it
+matters for what comes next: future compatibility tests can now distinguish much
+more reliably between an input problem and an emulation problem.
+
 ## October 2026 — From a spinning drive to a bootable disk
 
 During October, the Disk II model crossed several boundaries: it gained real
@@ -1750,5 +1783,6 @@ BASIC can draw in Hi-Res color.
 And now it boots both ProDOS and DOS 3.3 from an emulated Disk II, reads their
 filesystems, loads real Apple II software from disk, plays `LITTLE BRICK OUT`,
 runs Merlin's editor and assembler, writes Merlin output back to disk, plays
-Choplifter through an emulated two-axis Apple II joystick, runs DROL through
+Choplifter through an emulated two-axis Apple II joystick driven by a native SDL3
+gamepad, runs DROL through
 MAIN/AUX memory banking, and plays Spare Change with Apple II speaker audio. :)

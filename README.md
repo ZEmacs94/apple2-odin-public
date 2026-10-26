@@ -136,6 +136,11 @@ useful snapshot of the emulator at this stage of development.*
 
 The NMOS 6502 core currently implements **all 151 official opcode variants**.
 
+Apple IIe auxiliary-memory banking has now started as well. A separate 64 KB
+auxiliary RAM bank and the `RAMRD` / `RAMWRT` soft switches at `$C002-$C005`
+were implemented after a Raven-enhanced version of DROL exposed exactly why
+that extra memory matters.
+
 ## What is already working
 
 - NMOS 6502 CPU emulation
@@ -212,6 +217,10 @@ The NMOS 6502 core currently implements **all 151 official opcode variants**.
 - Continuous SDL3 keyboard control of both analog axes
 - `LITTLE BRICK OUT` playable from the DOS 3.3 System Master disk
 - `Choplifter` booting from disk, running its demo and playable with two-axis joystick control, firing and helicopter rotation
+- Separate 64 KB Apple IIe auxiliary RAM bank
+- Apple IIe `RAMRD` / `RAMWRT` soft switches (`$C002-$C005`)
+- Standard DROL progressing from level 1 to level 2 without auxiliary RAM
+- Raven-enhanced DROL progressing from level 1 to level 2 through MAIN/AUX memory banking
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -375,10 +384,23 @@ expected. Choplifter booted and ran its complete demo before any game-specific
 work was attempted. Completing the standard two-axis Apple II joystick interface
 was enough to make the helicopter controllable, including firing and rotation.
 
+The second major game compatibility target has now been crossed too:
+
+### DROL — level 2 ✓
+
+DROL turned into a much more interesting compatibility test than expected.
+A standard version progresses from level 1 to level 2 on the existing machine,
+without using auxiliary memory. A Raven-enhanced version, however, exposed the
+first real need for Apple IIe-style MAIN/AUX memory banking.
+
+![DROL running in apple2-odin](screenshots/drol.png)
+
+*DROL running in apple2-odin after the Raven investigation led to the first
+Apple IIe auxiliary-memory support.*
+
 The next programs and games I would particularly like to use as compatibility
 targets include:
 
-- DROL
 - Spare Change
 - Karateka
 - Aztec
@@ -1361,6 +1383,135 @@ Disk II write works.
 
 And Merlin can now create a file on the emulated disk.
 
+
+### October 26, 2026 — DROL asks for another 64 KB
+
+The day started with what looked like a CPU problem.
+
+DROL was already running beautifully. The game was fluid, the controls worked,
+and level 1 could be played all the way to the end. Then, exactly when the game
+should have moved to level 2, the emulator stopped on an unknown opcode:
+
+```text
+$57
+```
+
+On an NMOS 6502, `$57` is one of the undocumented opcodes. That made the first
+explanation look obvious: perhaps DROL was simply using instructions that my
+6502 core did not implement yet.
+
+So I added the corresponding undocumented instruction.
+
+The game went further.
+
+Then it stopped on another one:
+
+```text
+$2B
+```
+
+That was suspicious.
+
+Adding more undocumented-opcode support could make the symptom move, but the
+bytes around the crash did not look like a sensible program at all. The CPU
+was executing patterns such as:
+
+```text
+55 2A 55 2A 55 2E 55 2A 57 6A 55 6B ...
+```
+
+The problem was no longer *which instruction is missing?*
+
+The more useful question was:
+
+**Why is the 6502 executing this memory as code in the first place?**
+
+The Apple II Monitor provided the answer.
+
+The routine leading to the crash contained accesses to `$C002`, `$C003`,
+`$C004` and `$C005`: Apple IIe soft switches controlling reads and writes
+between main and auxiliary RAM.
+
+One loop was effectively doing this:
+
+```text
+RAMRD  = MAIN
+RAMWRT = AUX
+MAIN -> AUX
+```
+
+Later, another loop reversed the direction:
+
+```text
+RAMRD  = AUX
+RAMWRT = MAIN
+AUX -> MAIN
+```
+
+The Raven-enhanced game was deliberately moving an overlay between the two
+64 KB memory banks. My emulator only had the main bank, so the copy-back phase
+restored the wrong bytes. The following `JSR` then quite correctly jumped into
+what was, from the CPU's point of view, memory containing `$57`, `$2B` and
+other apparent undocumented instructions.
+
+The undocumented opcodes had been a symptom, not the cause.
+
+I added a separate 64 KB auxiliary RAM bank and implemented the first Apple IIe
+memory soft switches:
+
+```text
+$C002  RAMRD main
+$C003  RAMRD auxiliary
+$C004  RAMWRT main
+$C005  RAMWRT auxiliary
+```
+
+Then I ran DROL again.
+
+Level 1 ended.
+
+And level 2 appeared.
+
+![DROL running in apple2-odin](screenshots/drol-level-2.png)
+
+*The Raven-enhanced DROL reaching the next level after MAIN/AUX memory banking
+was added to apple2-odin.*
+
+There was still one important question: did DROL itself require 128 KB, or was
+this specific to the Raven-enhanced version?
+
+The cleanest test was to remove the new memory from the equation and try another
+version of DROL.
+
+Bingo.
+
+The standard version went from level 1 to level 2 perfectly well with auxiliary
+memory disabled.
+
+That gave a particularly satisfying A/B result:
+
+```text
+standard DROL + 48 KB path       -> level 2 ✓
+Raven DROL + no AUX banking      -> transition fails
+Raven DROL + MAIN/AUX banking    -> level 2 ✓
+```
+
+The exact reason Raven uses the extra bank still deserves investigation. The
+copy pattern strongly suggests some kind of overlay or caching mechanism, but
+that is not proven yet.
+
+What *is* proven is more useful: this was the first piece of real software to
+push apple2-odin beyond its original Apple II memory model and into Apple IIe
+auxiliary-memory behavior.
+
+It also produced another debugging lesson worth keeping.
+
+An unknown opcode does not always mean the CPU is missing an instruction.
+
+**Sometimes the processor is simply executing the wrong memory.**
+
+And this time, the missing hardware really was another 64 KB.
+
 ## October 2026 — From a spinning drive to a bootable disk
 
 During October, the Disk II model crossed several boundaries: it gained real
@@ -1403,11 +1554,14 @@ as well, with Merlin successfully saving assembled output back to disk.
 
 The current focus is the original Apple II architecture and NMOS 6502.
 
-The architecture is intended to leave room for:
+Apple IIe support has now started with separate MAIN/AUX memory and the
+`RAMRD` / `RAMWRT` soft switches. The architecture still leaves room for the
+remaining pieces:
 
-- Apple IIe
-- auxiliary memory
+- `80STORE` and the rest of the Apple IIe memory-management soft switches
+- `ALTZP`
 - 80-column mode
+- auxiliary video memory behavior
 - 65C02
 - Apple IIc
 

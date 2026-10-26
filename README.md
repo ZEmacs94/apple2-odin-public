@@ -141,6 +141,11 @@ auxiliary RAM bank and the `RAMRD` / `RAMWRT` soft switches at `$C002-$C005`
 were implemented after a Raven-enhanced version of DROL exposed exactly why
 that extra memory matters.
 
+The original Apple II speaker is now emulated too. Accesses to `$C030` toggle
+the speaker state, and the resulting CPU-timed signal is rendered as 48 kHz
+mono audio through SDL3. **Spare Change is now playable with its characteristic
+Apple II sound.**
+
 ## What is already working
 
 - NMOS 6502 CPU emulation
@@ -221,6 +226,9 @@ that extra memory matters.
 - Apple IIe `RAMRD` / `RAMWRT` soft switches (`$C002-$C005`)
 - Standard DROL progressing from level 1 to level 2 without auxiliary RAM
 - Raven-enhanced DROL progressing from level 1 to level 2 through MAIN/AUX memory banking
+- Apple II built-in speaker soft switch (`$C030`)
+- 48 kHz mono speaker audio output through SDL3
+- `Spare Change` playable with original Apple II speaker audio
 - SDL3 interactive frontend
 - Native Windows and macOS / Apple Silicon builds
 - BASIC program execution and screen scrolling
@@ -334,7 +342,6 @@ The next major hardware and compatibility steps include:
 - broader Disk II write compatibility testing
 - broader DOS 3.3 and ProDOS compatibility testing
 - further CPU timing accuracy work
-- speaker
 - further joystick / paddle frontend refinement
 - broader real-software compatibility testing
 - continued Hi-Res artifact-color accuracy work
@@ -393,15 +400,24 @@ A standard version progresses from level 1 to level 2 on the existing machine,
 without using auxiliary memory. A Raven-enhanced version, however, exposed the
 first real need for Apple IIe-style MAIN/AUX memory banking.
 
-![DROL running in apple2-odin](screenshots/drol.png)
+![DROL running in apple2-odin](screenshots/drol-level-2.png)
 
 *DROL running in apple2-odin after the Raven investigation led to the first
 Apple IIe auxiliary-memory support.*
 
+The next compatibility target has now been crossed too:
+
+### Spare Change — playable with sound ✓
+
+Spare Change booted and ran correctly without requiring another compatibility
+fix. What it did expose was something much more immediately noticeable: an
+Apple II running Spare Change in complete silence simply did not feel right.
+Its distinctive sound made the next missing piece of hardware obvious — the
+built-in speaker.
+
 The next programs and games I would particularly like to use as compatibility
 targets include:
 
-- Spare Change
 - Karateka
 - Aztec
 - Airheart
@@ -1512,6 +1528,46 @@ An unknown opcode does not always mean the CPU is missing an instruction.
 
 And this time, the missing hardware really was another 64 KB.
 
+### October 26, 2026 — Spare Change finds its voice
+
+After DROL had unexpectedly pushed the emulator into Apple IIe territory, I
+decided to try another classic: **Spare Change**.
+
+This time there was no mysterious crash, no missing opcode, and no new memory
+banking problem.
+
+It simply worked.
+
+The game booted normally, the graphics were correct, and the controls worked as
+expected.
+
+That was almost disappointing.
+
+But Spare Change has a rather distinctive — and wonderfully persistent — sound.
+Running it silently made the next missing piece of Apple II hardware rather
+obvious:
+
+**the speaker.**
+
+Fortunately, the original Apple II speaker is beautifully simple. There is no
+sound chip, no programmable tone generator and no synthesizer. Accessing soft
+switch `$C030` simply toggles the speaker output. The software creates sound by
+deciding *when* those transitions occur.
+
+The emulator now models that switch and turns the CPU-timed speaker state into a
+48 kHz mono PCM stream through SDL3.
+
+And suddenly Spare Change sounded like Spare Change.
+
+No game-specific sound emulation. No music reconstruction. Just the original
+6502 code toggling the original Apple II speaker interface at the right moments.
+
+**Spare Change — playable, with sound. ✓**
+
+After DROL asked for another 64 KB...
+
+**Spare Change asked for a speaker.**
+
 ## October 2026 — From a spinning drive to a bootable disk
 
 During October, the Disk II model crossed several boundaries: it gained real
@@ -1660,6 +1716,10 @@ With paddle support implemented, Little Brick Out is playable, while the same
 input model provides both joystick axes and two buttons for Choplifter without
 game-specific emulation code.
 
+The built-in Apple II speaker is now emulated through the `$C030` soft switch,
+with CPU-timed state changes rendered as 48 kHz mono audio through SDL3. Spare
+Change provides the first game validation of that audio path.
+
 Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
 
 The SDL3 frontend now presents the machine from a native 280×192 logical
@@ -1689,5 +1749,6 @@ BASIC can draw in Hi-Res color.
 
 And now it boots both ProDOS and DOS 3.3 from an emulated Disk II, reads their
 filesystems, loads real Apple II software from disk, plays `LITTLE BRICK OUT`,
-runs Merlin's editor and assembler, writes Merlin output back to disk, and plays
-Choplifter through an emulated two-axis Apple II joystick. :)
+runs Merlin's editor and assembler, writes Merlin output back to disk, plays
+Choplifter through an emulated two-axis Apple II joystick, runs DROL through
+MAIN/AUX memory banking, and plays Spare Change with Apple II speaker audio. :)

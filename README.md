@@ -136,6 +136,33 @@ useful snapshot of the emulator at this stage of development.*
 
 The SDL3 frontend now connects native host gamepads directly to that Apple II joystick model. The left analog stick drives the two paddle axes, the primary buttons map to the Apple II paddle buttons, and SDL3 gamepad hot-plug events allow controllers to be connected or removed while the emulator is running. The existing keyboard-driven paddle controls remain available as a fallback when no physical gamepad is connected. **Choplifter has now been validated with a real gamepad on macOS.**
 
+The frontend now also has a persistent machine-configuration workflow.
+Configuration is stored in `apple2.json`, and `F10` opens an in-window
+configuration panel while the emulated machine is paused. Machine model, CPU,
+memory size, ROM paths, slot configuration and Disk II images can be edited
+without leaving SDL3.
+
+ROM and disk-image paths can be selected through a portable file browser written
+in Odin rather than through platform-specific native dialogs. `SAVE & BOOT`
+writes the edited configuration back to JSON, completely reinitializes the
+emulated Apple II and boots the newly selected configuration.
+
+If `apple2.json` is absent, the emulator starts from its built-in defaults and
+opens the configuration panel automatically. The configuration UI currently
+uses the emulated Apple II character ROM for its text, so a valid character ROM
+remains a bootstrap requirement.
+
+`.dsk` images no longer require their sector order to be specified manually.
+The loader detects valid DOS 3.3 or ProDOS ordering automatically, retaining DOS
+3.3 as the fallback for ambiguous or custom images.
+
+The same source tree has now been built and run natively on **Windows x86-64,
+macOS / Apple Silicon and Linux x86-64**. The Linux validation was performed on
+Linux Mint running on a 2012 MacBook Pro. No Linux-specific change to the Apple
+II emulation core was required; increasing the SDL audio buffer from 512 to
+1024 samples was enough to remove host-side audio underruns on that older
+machine.
+
 The NMOS 6502 core currently implements **all 151 official opcode variants**.
 
 Apple IIe auxiliary-memory banking has now started as well. A separate 64 KB
@@ -235,7 +262,14 @@ Apple II sound.**
 - 48 kHz mono speaker audio output through SDL3
 - `Spare Change` playable with original Apple II speaker audio
 - SDL3 interactive frontend
-- Native Windows and macOS / Apple Silicon builds
+- Persistent JSON machine configuration (`apple2.json`)
+- F10 in-window configuration panel with emulation pause
+- Editable machine, CPU, memory, ROM, slot and Disk II image settings
+- Portable Odin / SDL3 file browser for ROM and disk-image selection
+- `SAVE & BOOT` configuration persistence and complete machine reboot
+- Automatic DOS 3.3 / ProDOS `.dsk` sector-order detection
+- Configuration panel opened from defaults when `apple2.json` is absent
+- Native Windows x86-64, macOS / Apple Silicon and Linux x86-64 builds
 - BASIC program execution and screen scrolling
 
 ## Architecture
@@ -276,10 +310,12 @@ Apple II emulation contains no SDL-specific logic.
 Keeping these layers separate should make other frontends and platforms
 possible later.
 
-That separation has now been validated on a second host platform: on
+That separation has now been validated across three host environments. On
 September 16, 2026, the emulator was built and run natively on an Apple Silicon
-M5 Mac without any change to the emulation core. Development can now move
-between Windows and macOS.
+M5 Mac without any change to the emulation core. In October, the same source
+tree was also built and run on Linux x86-64 under Linux Mint on a 2012 MacBook
+Pro. Development can now move between Windows, macOS and Linux without
+platform-specific changes to the emulated Apple II.
 
 ## Milestone #1 — From nothing to "HI"
 
@@ -337,22 +373,36 @@ can be controlled through the original Apple II soft switches at `$C054` and
 
 ## Where it goes next
 
-With **all 151 official NMOS 6502 opcode variants implemented**, and both
-ProDOS and DOS 3.3 now booting successfully through the emulated Disk II
-controller, the project has moved beyond the first disk-boot milestones.
+With the NMOS 6502, Disk II read/write path, speaker, joystick, debugger and
+configuration workflow now established, the next major compatibility step is no
+longer another Apple II+ peripheral.
+
+It is the **Apple IIe 128K memory and video architecture**.
+
+The Raven-enhanced version of DROL has already forced the first MAIN/AUX memory
+path into the emulator. Airheart now makes the next requirement explicit: it
+refuses to continue unless it sees an Apple IIc or a 128K Apple IIe.
 
 The next major hardware and compatibility steps include:
 
-- improving Disk II quarter-track / intermediate head-position behavior
-- broader Disk II write compatibility testing
-- broader DOS 3.3 and ProDOS compatibility testing
-- further CPU timing accuracy work
-- further joystick / paddle frontend refinement
-- broader real-software compatibility testing
-- continued Hi-Res artifact-color accuracy work
+- completing Apple IIe 128K MAIN/AUX memory mapping
+- implementing the remaining auxiliary-memory soft switches, including
+  `80STORE` and `ALTZP`
+- adding 80-column text support
+- adding the Extended 80-Column Card video paths
+- adding Double Hi-Res graphics
+- returning to Airheart as the compatibility test that ties those pieces
+  together
+- continuing broader real-software and Disk II compatibility testing
+- refining CPU timing and Hi-Res artifact-color accuracy where real software
+  exposes a need
 
-The exact order may change as real software continues to expose missing pieces
-of the machine.
+65C02 and Apple IIc support remain later steps. The immediate goal is to make
+the 128K Apple IIe path complete enough for Airheart without short-circuiting
+the hardware it expects.
+
+The exact order may still change as real software continues to expose missing
+pieces of the machine.
 
 ## The next big milestone
 
@@ -421,14 +471,34 @@ Apple II running Spare Change in complete silence simply did not feel right.
 Its distinctive sound made the next missing piece of hardware obvious — the
 built-in speaker.
 
-The next programs and games I would particularly like to use as compatibility
-targets include:
+Two more compatibility targets have now been crossed:
 
-- Karateka
-- Aztec
-- Airheart
+### Karateka — playable ✓
 
-**Airheart is the long-term stress test.**
+Karateka became the first real job for the integrated debugger. Its loader was
+reading valid sectors, but the Disk II head model was moving through an
+incorrect approximation of the four-phase stepper sequence. Deriving the
+mechanical target from the **combined state of all four phases** fixed the
+quarter-track movement without a game-specific workaround.
+
+### Aztec — running ✓
+
+Aztec now boots and runs through the same Apple II and Disk II paths as the
+other compatibility targets.
+
+### Airheart — current target
+
+Airheart now gets far enough to identify the next missing machine explicitly:
+
+```text
+REQUIRES //C OR 128K //E
+```
+
+That is a useful failure. Rather than bypassing the check, the next phase of
+the project is to implement the Apple IIe 128K hardware that the game is asking
+for.
+
+**Airheart remains the long-term stress test.**
 
 If this emulator eventually runs Airheart correctly, a lot of things will
 have gone right along the way.
@@ -1601,6 +1671,104 @@ This is less spectacular than another 64 KB or a suddenly audible speaker, but i
 matters for what comes next: future compatibility tests can now distinguish much
 more reliably between an input problem and an emulation problem.
 
+### October 27, 2026 — Giving the emulator a window into itself
+
+As compatibility work became deeper, repeatedly adding temporary traces to the
+emulation core was becoming less attractive. The emulator needed a permanent
+way to inspect itself without changing the behavior being investigated.
+
+The SDL3 frontend now has an integrated debugger showing CPU registers and
+flags, the stack, memory around the current program counter, Disk II mechanical
+state and the current MAIN/AUX and Language Card mapping.
+
+Memory inspection uses a dedicated side-effect-free path: looking at the
+machine must not operate the machine.
+
+The debugger immediately justified its existence by helping isolate Karateka's
+Disk II stepper problem.
+
+**Integrated debugger — first version complete. ✓**
+
+### October 27, 2026 — Karateka finds the flaw in the stepper
+
+Karateka loaded its disk and displayed `APPLE ][`, but then appeared to go
+nowhere.
+
+The debugger showed that the low-level disk path was healthy: the loader found
+the `D5 AA AD` data-field prologue, consumed the complete encoded sector,
+validated its checksum and accepted the epilogue. Track 1 completed all sixteen
+sector reads.
+
+The important clue appeared when the loader advanced toward the next track.
+
+The original stepper implementation approximated movement by reacting to
+individual phase changes. That was sufficient for DOS 3.3, ProDOS, Merlin and
+several games, but not for Karateka's loader.
+
+The model now derives the mechanical target from the **combined state of all
+four stepper phases**, allowing the head to move through the proper
+quarter-track sequence.
+
+With that change, Karateka continued loading.
+
+**Karateka — playable. ✓**
+
+### October 31, 2026 — The emulator learns how to configure itself
+
+By the end of October, changing ROMs and disk images had become one of the least
+elegant parts of the emulator. That was acceptable while there was effectively
+one machine configuration, but Apple IIe work was about to make configuration
+matter much more.
+
+Machine choices now live in a real `Machine_Config` structure persisted as
+readable JSON. Pressing `F10` pauses the emulated machine and opens a
+configuration panel inside the existing SDL3 frontend.
+
+File selection is handled by a small portable browser written in Odin:
+
+```text
+F10
+    -> configuration panel
+    -> ROM / disk field
+    -> portable file browser
+    -> select file
+    -> configuration edit
+    -> SAVE & BOOT
+    -> apple2.json
+    -> complete machine reinitialization
+    -> boot
+```
+
+The browser provides directory enumeration, directories-first sorting,
+scrolling, `../` parent navigation and file selection without depending on
+Win32, Cocoa or GTK file dialogs.
+
+`SAVE & BOOT` also exposed a subtle timing issue. The configuration panel
+correctly paused the 6502, but the frontend clock initially remembered the time
+spent in the panel. On resume, that elapsed host time could become a backlog of
+CPU cycles. Resetting the frontend timing reference on every transition back to
+emulation made configuration mode a real pause.
+
+The `.dsk` loader now also detects DOS 3.3 and ProDOS sector ordering
+automatically.
+
+At roughly the same time, the same source tree was cloned and built on a third
+host: Linux Mint on a 2012 MacBook Pro. The emulator ran without a
+Linux-specific change to the Apple II core. Increasing the SDL audio buffer
+from 512 to 1024 samples removed the audible underruns on that older host.
+
+The project now has the same basic workflow on three very different machines:
+
+```text
+Windows x86-64        ✓
+macOS / Apple Silicon ✓
+Linux x86-64          ✓
+```
+
+That is a useful place to stop working on the frontend for a while.
+
+The next machine waiting behind the configuration panel is a 128K Apple IIe.
+
 ## October 2026 — From a spinning drive to a bootable disk
 
 During October, the Disk II model crossed several boundaries: it gained real
@@ -1641,32 +1809,39 @@ as well, with Merlin successfully saving assembled output back to disk.
 
 ## Longer-term goals
 
-The current focus is the original Apple II architecture and NMOS 6502.
+The current compatibility focus is now the 128K Apple IIe.
 
-Apple IIe support has now started with separate MAIN/AUX memory and the
-`RAMRD` / `RAMWRT` soft switches. The architecture still leaves room for the
-remaining pieces:
+Apple IIe support has started with separate MAIN/AUX memory and the `RAMRD` /
+`RAMWRT` soft switches. The remaining path includes:
 
 - `80STORE` and the rest of the Apple IIe memory-management soft switches
 - `ALTZP`
 - 80-column mode
-- auxiliary video memory behavior
+- Extended 80-Column Card video behavior
+- Double Hi-Res
+- Airheart as the integration target
 - 65C02
 - Apple IIc
 
-Portability is also a long-term objective, with native Windows and macOS /
-Apple Silicon builds now working.
+Portability is also a long-term objective, with the same source tree now
+validated on three native host environments.
 
 Current and potential platforms include:
 
-- Windows — working
+- Windows x86-64 — working
 - macOS / Apple Silicon — working
-- Linux
+- Linux x86-64 — working
 - Web / WebAssembly
+- iOS / iPadOS
+- Android
 
-iOS / iPadOS may eventually become a separate frontend project.
+A longer-term experiment I would also like to explore is transparent network
+play for original two-player Apple II software, without modifying the original
+game. A deterministic two-emulator session around **One on One: Dr. J vs.
+Larry Bird** would be a particularly appropriate test.
 
-For now, getting the Apple II itself right takes priority.
+For now, getting the Apple IIe itself right takes priority.
+
 
 ## Why Odin?
 

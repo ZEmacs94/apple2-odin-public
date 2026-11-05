@@ -32,6 +32,31 @@ understand the machine while building it.
 
 ## Current status
 
+### November 2026 — Airheart runs on the Apple IIe 128K
+
+**Airheart is now running in Odin's Apple IIe 128K configuration.** This is a
+major compatibility milestone: the game gets past its 128K machine check and
+reaches its in-game graphics and cockpit, with the emulated CPU continuing to
+execute the game.
+
+![Airheart running in Odin with the current Hi-Res renderer](screenshots/airheart-hires.png)
+
+*Airheart running on the emulated Apple IIe 128K. The game is executing, but
+Double Hi-Res is not implemented yet, so the image is displayed through the
+standard Hi-Res renderer and the graphics are visibly incorrect.*
+
+The milestone came from improving the underlying hardware model rather than
+adding an Airheart-specific workaround. The memory bus now distinguishes
+main and auxiliary RAM, implements Apple IIe memory soft switches, handles
+internal and slot ROM selection, and separates Language Card control state
+from its independent MAIN/AUX backing memory. Focused regression tests cover
+bank selection, write-enable sequencing and auxiliary-memory isolation.
+
+**This is not a claim of full Airheart compatibility:** proper Double Hi-Res
+rendering is still missing, and gameplay and long-running stability need
+further validation. It is, however, a substantial step toward the original
+128K Apple IIe compatibility goal.
+
 The emulator can now boot both the original Apple II ROM and a real ProDOS
 system from a `.dsk` disk image.
 
@@ -486,22 +511,25 @@ quarter-track movement without a game-specific workaround.
 Aztec now boots and runs through the same Apple II and Disk II paths as the
 other compatibility targets.
 
-### Airheart — current target
+### Airheart — running on Apple IIe 128K; Double Hi-Res pending
 
-Airheart now gets far enough to identify the next missing machine explicitly:
+Airheart originally stopped at its hardware requirement check:
 
 ```text
 REQUIRES //C OR 128K //E
 ```
 
-That is a useful failure. Rather than bypassing the check, the next phase of
-the project is to implement the Apple IIe 128K hardware that the game is asking
-for.
+The Apple IIe memory work changed that. Airheart now runs on the emulated
+128K Apple IIe and reaches its graphical game screen. The current screenshot
+shows the game through Odin's standard Hi-Res renderer; the intended Double
+Hi-Res graphics are not yet decoded correctly.
 
-**Airheart remains the long-term stress test.**
+![Airheart in the current Hi-Res renderer](screenshots/airheart-hires.png)
 
-If this emulator eventually runs Airheart correctly, a lot of things will
-have gone right along the way.
+*An important execution milestone, not yet a correct Double Hi-Res picture.*
+
+**Airheart remains the long-term stress test.** The next visible gap is
+Double Hi-Res support, followed by further gameplay and stability testing.
 
 ## Development journal
 
@@ -1769,6 +1797,32 @@ That is a useful place to stop working on the frontend for a while.
 
 The next machine waiting behind the configuration panel is a 128K Apple IIe.
 
+### November 5, 2026 — Airheart crosses the 128K boundary
+
+The Apple IIe 128K work began with a concrete compatibility problem: Airheart
+would not accept the emulated machine. Rather than bypassing the detection,
+I used it as a reason to revisit the memory architecture.
+
+The work clarified the responsibilities of the memory bus, RAM MAIN/AUX
+selection, the Apple IIe memory soft switches, slot ROM visibility and the
+Language Card. In particular, the Language Card now has one set of control
+switches and separate MAIN and AUX memory stores, selected through `ALTZP`.
+That avoids introducing state changes merely to read memory, including when
+inspecting it from the debugger.
+
+The refactor was checked with focused tests for the IIe switches, internal
+ROM selection, slot ROM writes, Language Card bank switching, prewrite
+sequencing and independent auxiliary high memory. Existing DOS 3.3 and Merlin
+workflows were also exercised as regression checks.
+
+Then came the payoff: **Airheart ran on the 128K Apple IIe configuration.**
+The game reached its graphical screen, and the integrated debugger could
+inspect the running machine. The picture is still wrong because Odin has
+only a standard Hi-Res renderer, not Double Hi-Res.
+
+That makes the next missing feature wonderfully concrete. The machine can
+execute Airheart; now the video hardware has to catch up.
+
 ## October 2026 — From a spinning drive to a bootable disk
 
 During October, the Disk II model crossed several boundaries: it gained real
@@ -1948,6 +2002,10 @@ cycle-accurate Apple II emulator.
 The source code remains private for now.
 
 Progress, experiments and significant milestones will be documented here.
+
+**November 2026 milestone:** Airheart now runs in Apple IIe 128K mode,
+although Double Hi-Res rendering is still missing and full compatibility
+has not yet been established.
 
 But it boots.
 

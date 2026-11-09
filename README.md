@@ -32,30 +32,40 @@ understand the machine while building it.
 
 ## Current status
 
-### November 2026 — Airheart runs on the Apple IIe 128K
+### November 2026 — Airheart in Double Hi-Res color
 
-**Airheart is now running in Odin's Apple IIe 128K configuration.** This is a
-major compatibility milestone: the game gets past its 128K machine check and
-reaches its in-game graphics and cockpit, with the emulated CPU continuing to
-execute the game.
+**Airheart now reaches its graphical screen on Odin's emulated 128K Apple IIe,
+with Double Hi-Res (DHGR) rendering enabled.** The game had already passed its
+128K hardware check, but for a while its screen was being interpreted by the
+ordinary Hi-Res renderer. The result was a useful compatibility milestone and
+an unmistakably wrong picture.
 
-![Airheart running in Odin with the current Hi-Res renderer](screenshots/airheart-hires.png)
+The earlier screenshot is worth keeping:
 
-*Airheart running on the emulated Apple IIe 128K. The game is executing, but
-Double Hi-Res is not implemented yet, so the image is displayed through the
-standard Hi-Res renderer and the graphics are visibly incorrect.*
+![Airheart before Double Hi-Res support](screenshots/airheart-hires.png)
 
-The milestone came from improving the underlying hardware model rather than
-adding an Airheart-specific workaround. The memory bus now distinguishes
-main and auxiliary RAM, implements Apple IIe memory soft switches, handles
-internal and slot ROM selection, and separates Language Card control state
-from its independent MAIN/AUX backing memory. Focused regression tests cover
-bank selection, write-enable sequencing and auxiliary-memory isolation.
+*Airheart executing on the emulated 128K Apple IIe before its Double Hi-Res
+video data could be decoded correctly.*
 
-**This is not a claim of full Airheart compatibility:** proper Double Hi-Res
-rendering is still missing, and gameplay and long-running stability need
-further validation. It is, however, a substantial step toward the original
-128K Apple IIe compatibility goal.
+And here is the new result, captured on Windows:
+
+![Airheart in Double Hi-Res color in Odin](screenshots/airheart-dbhgr.png)
+
+*Airheart's title screen and cockpit rendered through Odin's Double Hi-Res
+path. The image marks a major improvement in color and detail over the
+previous Hi-Res interpretation.*
+
+Getting there required more than adding another display mode. The Apple IIe
+video path combines data from main and auxiliary memory, and interpreting the
+resulting bit patterns as colors proved to be a project of its own. Several
+plausible palette and phase experiments produced everything from a cyan sky to
+strikingly wrong magenta stripes. A small Applesoft BASIC test eventually
+provided a much better way to isolate and verify the color mapping.
+
+The 128K memory model and the DHGR renderer are now substantial compatibility
+milestones, achieved without an Airheart-specific drawing workaround.
+**This is not yet a claim of complete Airheart compatibility:** gameplay,
+long-running stability and video fidelity still deserve further testing.
 
 The emulator can now boot both the original Apple II ROM and a real ProDOS
 system from a `.dsk` disk image.
@@ -115,8 +125,9 @@ parity and neighboring pixels to produce black, white, green, purple, blue and
 orange. Applesoft `HGR`, `HCOLOR=` and `HPLOT` all render through emulated video
 memory.
 
-The SDL3 frontend now renders the Apple II in its native **280×192 logical
-coordinate space**. SDL3 handles presentation to the host window adaptively,
+The SDL3 frontend keeps Apple II video coordinates independent from host
+display scaling, including the **280×192 Hi-Res** and **560×192 Double Hi-Res**
+paths. SDL3 handles presentation to the host window adaptively,
 preserving the original aspect ratio while keeping Apple II pixel coordinates
 independent from display scaling.
 
@@ -233,6 +244,9 @@ Apple II sound.**
 - Hi-Res artifact-color approximation: green, purple, blue and orange
 - Hi-Res phase-bit and absolute pixel-parity decoding
 - Neighbor-aware Hi-Res decoding for white and artifact colors
+- Apple IIe Double Hi-Res (DHGR) rendering from MAIN and AUX video memory
+- 560×192 Double Hi-Res pixel path and 16-color palette mapping
+- Airheart title screen and cockpit rendered in Double Hi-Res color
 - Native 280×192 logical rendering independent from host display scaling
 - Adaptive SDL3 presentation with aspect-ratio-preserving letterboxing
 - Initial Disk II controller state
@@ -404,27 +418,27 @@ longer another Apple II+ peripheral.
 
 It is the **Apple IIe 128K memory and video architecture**.
 
-The Raven-enhanced version of DROL has already forced the first MAIN/AUX memory
-path into the emulator. Airheart now makes the next requirement explicit: it
-refuses to continue unless it sees an Apple IIc or a 128K Apple IIe.
+The Raven-enhanced version of DROL first pushed the emulator into MAIN/AUX
+memory banking. Airheart then required a complete enough 128K Apple IIe model
+to pass its hardware check, followed by Double Hi-Res video support.
 
-The next major hardware and compatibility steps include:
+The next hardware and compatibility steps include:
 
 - completing Apple IIe 128K MAIN/AUX memory mapping
 - implementing the remaining auxiliary-memory soft switches, including
   `80STORE` and `ALTZP`
 - adding 80-column text support
 - adding the Extended 80-Column Card video paths
-- adding Double Hi-Res graphics
-- returning to Airheart as the compatibility test that ties those pieces
-  together
+- refining Double Hi-Res color fidelity and validating its behavior across
+  additional software
+- continuing Airheart gameplay and stability tests
 - continuing broader real-software and Disk II compatibility testing
 - refining CPU timing and Hi-Res artifact-color accuracy where real software
   exposes a need
 
-65C02 and Apple IIc support remain later steps. The immediate goal is to make
-the 128K Apple IIe path complete enough for Airheart without short-circuiting
-the hardware it expects.
+65C02 and Apple IIc support remain later steps. The immediate goal is to
+validate and refine the 128K Apple IIe implementation with real software,
+without short-circuiting the hardware it expects.
 
 The exact order may still change as real software continues to expose missing
 pieces of the machine.
@@ -511,7 +525,7 @@ quarter-track movement without a game-specific workaround.
 Aztec now boots and runs through the same Apple II and Disk II paths as the
 other compatibility targets.
 
-### Airheart — running on Apple IIe 128K; Double Hi-Res pending
+### Airheart — Double Hi-Res color milestone ✓
 
 Airheart originally stopped at its hardware requirement check:
 
@@ -519,17 +533,22 @@ Airheart originally stopped at its hardware requirement check:
 REQUIRES //C OR 128K //E
 ```
 
-The Apple IIe memory work changed that. Airheart now runs on the emulated
-128K Apple IIe and reaches its graphical game screen. The current screenshot
-shows the game through Odin's standard Hi-Res renderer; the intended Double
-Hi-Res graphics are not yet decoded correctly.
+Completing the Apple IIe memory model allowed the game to run, but its first
+screen was displayed through the wrong video mode:
 
-![Airheart in the current Hi-Res renderer](screenshots/airheart-hires.png)
+![Airheart before DHGR decoding](screenshots/airheart-hires.png)
 
-*An important execution milestone, not yet a correct Double Hi-Res picture.*
+The next challenge was Double Hi-Res color. After a long investigation into
+pixel packing, phase and palette mapping, the title screen and cockpit now
+render through the DHGR path:
 
-**Airheart remains the long-term stress test.** The next visible gap is
-Double Hi-Res support, followed by further gameplay and stability testing.
+![Airheart with Double Hi-Res rendering](screenshots/airheart-dbhgr.png)
+
+*The new Double Hi-Res result, captured on Windows.*
+
+**Airheart remains a long-term stress test.** The graphical milestone is real;
+complete gameplay compatibility and long-running stability remain to be
+validated.
 
 ## Development journal
 
@@ -1823,6 +1842,59 @@ only a standard Hi-Res renderer, not Double Hi-Res.
 That makes the next missing feature wonderfully concrete. The machine can
 execute Airheart; now the video hardware has to catch up.
 
+### November 9, 2026 — Sixteen colors, one stubborn blue sky
+
+After Airheart finally accepted the emulated 128K Apple IIe, I expected the
+next step to be fairly straightforward: decode its Double Hi-Res graphics.
+The bytes were there. The game was running. Surely it was just a matter of
+putting the pixels on the screen.
+
+Not quite.
+
+Double Hi-Res uses both auxiliary and main memory, with seven visible bits
+per byte. Together they describe a 560×192 pixel stream, but **those bits
+are not simply sixteen conventional RGB colors waiting to be looked up**.
+The relationship between bit patterns, color phase and the displayed palette
+is part of what makes Apple II video so distinctive.
+
+The first attempts got some things right and others spectacularly wrong.
+The Airheart logo became recognizably orange, while the sky stubbornly stayed
+cyan instead of blue. Moving the four-bit color window or adjusting its phase
+could improve one area while damaging another. Some versions turned the image
+into vertical stripes. An experimental composite/YIQ approximation was even
+worse: a magenta sky, a green logo and smeared text.
+
+These were not subtle differences that required a colorimeter.
+
+They were the sort of differences that make you wonder whether the computer
+is displaying the same game at all.
+
+The useful change in approach was to stop judging the entire decoder from a
+single complicated game screen. A small Applesoft BASIC color test gave me a
+controlled reference: known video data, a limited set of colors, and a way to
+check the mapping without guessing from the artwork. That helped separate the
+question of *which bits are being read* from *which color those bits should
+produce*.
+
+The final result is now visible in the new screenshot:
+
+![Airheart rendered in Double Hi-Res color](screenshots/airheart-dbhgr.png)
+
+*Airheart in Odin on Windows, after the Double Hi-Res palette investigation.*
+
+The logo is orange, the sky is blue, the lettering is readable and the cockpit
+has its intended multicolored appearance. There is still work to do before
+calling the video system fully faithful, and displaying the game is not the
+same as proving every part of gameplay works.
+
+But this is a very different milestone from merely getting Airheart to run.
+
+The CPU and memory system had already convinced the game that it was inside
+an Apple IIe. Now the screen is finally beginning to convince me too.
+
+**The lesson this time: when sixteen colors refuse to cooperate, test the
+palette with sixteen colors — not with an entire video game.**
+
 ## October 2026 — From a spinning drive to a bootable disk
 
 During October, the Disk II model crossed several boundaries: it gained real
@@ -1982,10 +2054,11 @@ The built-in Apple II speaker is now emulated through the `$C030` soft switch,
 with CPU-timed state changes rendered as 48 kHz mono audio through SDL3. Spare
 Change provides the first game validation of that audio path.
 
-Lo-Res graphics and Hi-Res graphics with a first artifact-color approximation are working.
+Lo-Res, Hi-Res artifact-color approximation and Apple IIe Double Hi-Res
+color rendering are working.
 
-The SDL3 frontend now presents the machine from a native 280×192 logical
-viewport, and the same codebase runs natively on Windows and macOS / Apple
+The SDL3 frontend presents native Apple II video modes independently of host
+window scaling, and the same codebase runs natively on Windows and macOS / Apple
 Silicon.
 
 And there will certainly be plenty of surprises along the way.
@@ -2003,9 +2076,9 @@ The source code remains private for now.
 
 Progress, experiments and significant milestones will be documented here.
 
-**November 2026 milestone:** Airheart now runs in Apple IIe 128K mode,
-although Double Hi-Res rendering is still missing and full compatibility
-has not yet been established.
+**November 2026 milestone:** Airheart now runs in Apple IIe 128K mode and
+its title screen and cockpit render in Double Hi-Res color. Full gameplay
+compatibility and long-running stability have not yet been established.
 
 But it boots.
 

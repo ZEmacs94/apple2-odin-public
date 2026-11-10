@@ -39,6 +39,8 @@ The Apple IIe video work reached a new milestone with **Apple II DeskTop
 Hi-Resolution**, including its menu bar, icons and patterned background.
 The result was visually compared with AppleWin in monochrome mode.
 
+![Apple Desktop monochrome mode](screenshots/desktop.png)
+
 A separate monochrome renderer interprets the seven video bits of each byte,
 interleaving AUX and MAIN data. The existing 16-color DHGR renderer remains
 available; choosing monochrome is an emulator display preference, not a new

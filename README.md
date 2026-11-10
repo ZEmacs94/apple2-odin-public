@@ -32,6 +32,32 @@ understand the machine while building it.
 
 ## Current status
 
+### November 10, 2026 — A desktop in 560 pixels
+
+The Apple IIe video work reached a new milestone with **Apple II DeskTop
+(MouseDesk)**. Odin now renders the desktop in **560 × 192 monochrome Double
+Hi-Resolution**, including its menu bar, icons and patterned background.
+The result was visually compared with AppleWin in monochrome mode.
+
+A separate monochrome renderer interprets the seven video bits of each byte,
+interleaving AUX and MAIN data. The existing 16-color DHGR renderer remains
+available; choosing monochrome is an emulator display preference, not a new
+Apple IIe soft switch.
+
+**80-column text (80 × 24) is also working.** It uses interleaved AUX/MAIN
+character data and the 560-pixel-wide video path, while retaining the existing
+40-column mode. One observed French `è` appears as `}` with the current
+character ROM; national character-set variants remain future work.
+
+**Leisure Suit Larry** also runs interactively with DHGR color graphics. A
+previous display-page bug was fixed by distinguishing `PAGE2` from the displayed
+page when `80STORE` is enabled; this eliminated visible flicker.
+
+The desktop is displayed but is **not yet mouse-interactive**. AppleMouse II
+card emulation is the next planned peripheral milestone. Second-drive behavior
+and mixed video modes still require targeted validation.
+
+
 ### November 2026 — Airheart in Double Hi-Res color
 
 **Airheart now reaches its graphical screen on Odin's emulated 128K Apple IIe,
@@ -228,6 +254,7 @@ Apple II sound.**
 - Runtime gamepad connect / disconnect support through SDL3 hot-plug events
 - Keyboard paddle / joystick fallback when no physical gamepad is connected
 - 40×24 Apple II text display
+- 80×24 Apple IIe text display using interleaved AUX/MAIN character data
 - Original Apple II character generator ROM
 - Normal, inverse and flashing text
 - PAGE1 / PAGE2 video selection
@@ -246,6 +273,9 @@ Apple II sound.**
 - Neighbor-aware Hi-Res decoding for white and artifact colors
 - Apple IIe Double Hi-Res (DHGR) rendering from MAIN and AUX video memory
 - 560×192 Double Hi-Res pixel path and 16-color palette mapping
+- Separate 560×192 monochrome Double Hi-Res rendering
+- Apple II DeskTop desktop, menus and icons displayed in monochrome
+- Leisure Suit Larry interactive gameplay with DHGR color
 - Airheart title screen and cockpit rendered in Double Hi-Res color
 - Native 280×192 logical rendering independent from host display scaling
 - Adaptive SDL3 presentation with aspect-ratio-preserving letterboxing
@@ -424,11 +454,12 @@ to pass its hardware check, followed by Double Hi-Res video support.
 
 The next hardware and compatibility steps include:
 
+- emulating the AppleMouse II card and connecting host mouse input
+
 - completing Apple IIe 128K MAIN/AUX memory mapping
 - implementing the remaining auxiliary-memory soft switches, including
   `80STORE` and `ALTZP`
-- adding 80-column text support
-- adding the Extended 80-Column Card video paths
+- validating remaining Extended 80-Column Card and mixed-mode behavior
 - refining Double Hi-Res color fidelity and validating its behavior across
   additional software
 - continuing Airheart gameplay and stability tests
@@ -2076,9 +2107,10 @@ The source code remains private for now.
 
 Progress, experiments and significant milestones will be documented here.
 
-**November 2026 milestone:** Airheart now runs in Apple IIe 128K mode and
-its title screen and cockpit render in Double Hi-Res color. Full gameplay
-compatibility and long-running stability have not yet been established.
+**November 2026 milestone:** Airheart reaches its Double Hi-Res color screen;
+Leisure Suit Larry runs interactively in DHGR color; Apple II DeskTop displays
+in 560 × 192 monochrome; and 80-column text is operational. Full software
+compatibility and long-running stability remain under test.
 
 But it boots.
 
